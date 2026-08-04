@@ -2586,6 +2586,25 @@ async function composeRecordBody(id){
   </tr>`;
 
   const resumenMeta = accionesResumen(r);
+
+  // Tabla de datos: la severidad solo aparece en los tipos que la usan.
+  const metaCells = [
+    {l:'Empresa', v:co?co.name:'—'},
+    {l:'Instalación / Área', v:(r.instalacion||'—')+(r.area?' · '+r.area:'')},
+    {l:'Fecha '+tipoDescriptor(r.tipo), v:fmtDate(r.fecha)},
+  ];
+  if(TIPOS_CON_SEVERIDAD.includes(r.tipo)) metaCells.push({l:'Severidad', v:r.severidad||'—'});
+  else if(r.tipo==='SUG') metaCells.push({l:'¿Se llevará a cabo?', v:r.sug_realiza||'—'});
+  metaCells.push({l:'Estado actual', v:r.estado||'—'});
+  metaCells.push({l:'Responsable', v:resumenMeta.responsable});
+  metaCells.push({l:'Reportado por', v:r.reportado_por||'—'});
+  metaCells.push({l:'Fecha de vencimiento', v:(resumenMeta.vencimiento?fmtDate(resumenMeta.vencimiento):'—')+(isOverdue(r)?' ⚠ VENCIDA':'')});
+  metaCells.push({l:'Fecha de cierre', v:fmtDate(r.fecha_cierre)});
+  if(r.tipo!=='SUG') metaCells.push({l:'Referencia normativa', v:r.referencia_normativa||'—'});
+  let metaTableHtml = '<table style="width:100%;border-collapse:collapse;margin-bottom:14px;">';
+  for(let i=0;i<metaCells.length;i+=2){ metaTableHtml += metaRow(metaCells[i], metaCells[i+1] || {l:'',v:''}); }
+  metaTableHtml += '</table>';
+
   let body = `
     <table style="width:100%;border-collapse:collapse;margin-bottom:14px;">
       <tr>
@@ -2605,13 +2624,7 @@ async function composeRecordBody(id){
     </p>
     ${r.titulo ? `<div style="font-family:Arial;font-size:15pt;font-weight:bold;color:${NAVY};margin:0 0 12px;">${r.titulo}</div>` : ''}
 
-    <table style="width:100%;border-collapse:collapse;margin-bottom:14px;">
-      ${metaRow({l:'Empresa', v:co?co.name:'—'}, {l:'Instalación / Área', v:(r.instalacion||'—')+(r.area?' · '+r.area:'')})}
-      ${metaRow({l:'Fecha '+tipoDescriptor(r.tipo), v:fmtDate(r.fecha)}, {l:'Severidad', v:r.severidad||'—'})}
-      ${metaRow({l:'Estado actual', v:r.estado||'—'}, {l:'Responsable', v:resumenMeta.responsable})}
-      ${metaRow({l:'Reportado por', v:r.reportado_por||'—'}, {l:'Fecha de vencimiento', v:(resumenMeta.vencimiento?fmtDate(resumenMeta.vencimiento):'—')+(isOverdue(r)?' ⚠ VENCIDA':'')})}
-      ${metaRow({l:'Fecha de cierre', v:fmtDate(r.fecha_cierre)}, {l:'Referencia normativa', v:r.referencia_normativa||'—'})}
-    </table>
+    ${metaTableHtml}
 
     `;
 
