@@ -926,7 +926,7 @@ function renderTable(){
   list.sort((a,b)=> (b.fecha||'').localeCompare(a.fecha||''));
 
   const title = currentTypeFilter==='ALL' ? 'Todos los registros' : TYPES[currentTypeFilter].label;
-  document.getElementById('viewTitle').textContent = currentTypeFilter==='ALL' ? 'Panel General' : title;
+  document.getElementById('viewTitle').textContent = currentTypeFilter==='ALL' ? 'PL OFFSHORE - HSQE CONTROL PANEL' : title;
   const siteName = currentSiteFilter==='ALL' ? 'Todos los sitios' : currentSiteFilter;
   document.getElementById('viewMeta').textContent = `${siteName} · ${list.length} registro(s)`;
 
