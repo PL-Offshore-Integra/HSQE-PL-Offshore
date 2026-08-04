@@ -379,15 +379,27 @@ function renderSiteSelect(){
 }
 function setSiteFilter(v){ currentSiteFilter = v; renderAll(); }
 
+// Orden y agrupación del menú lateral de categorías
+const NAV_ORDER_1 = ['NC','OBS','OM','INC','ACC','CUA','LA'];
+const NAV_ORDER_PROACTIVOS = ['AI','CI','SUG'];
+// Color del punto/bullet en el menú (independiente del color del tipo en tablas/gráficos)
+const NAV_DOT_COLORS = {
+  ALL:'#FFFFFF',
+  NC:'#E67E22', OBS:'#E67E22', OM:'#E67E22',            // naranja
+  INC:'#C0392B', ACC:'#C0392B', CUA:'#C0392B', LA:'#C0392B', // rojo
+  AI:'#8FC1E8', CI:'#8FC1E8', SUG:'#8FC1E8',            // celeste claro
+};
+function navDotColor(k){ return NAV_DOT_COLORS[k] || (TYPES[k] && TYPES[k].color) || '#B7C4CE'; }
+
 function renderTypeNav(){
   const wrap = document.getElementById('typeNav');
   const filtered = filteredRecords(true);
+  const count = k => filtered.filter(r=>r.tipo===k).length;
   let html = `<div class="nav-label">Categorías</div>`;
-  html += navItem('ALL', 'Todos los registros', '#B7C4CE', filtered.length);
-  Object.keys(TYPES).forEach(k=>{
-    const c = filtered.filter(r=>r.tipo===k).length;
-    html += navItem(k, TYPES[k].label, TYPES[k].color, c);
-  });
+  html += navItem('ALL', 'Todos los registros', navDotColor('ALL'), filtered.length);
+  NAV_ORDER_1.forEach(k=>{ if(TYPES[k]) html += navItem(k, TYPES[k].label, navDotColor(k), count(k)); });
+  html += `<div class="nav-label" style="margin-top:12px;">Reportes Proactivos</div>`;
+  NAV_ORDER_PROACTIVOS.forEach(k=>{ if(TYPES[k]) html += navItem(k, TYPES[k].label, navDotColor(k), count(k)); });
   html += `<div class="nav-item ${currentTypeFilter==='KPI'?'active':''}" onclick="setTypeFilter('KPI')" style="margin-top:6px;">
     <span class="nav-dot" style="background:#0A3A66"></span>KPI HSQE
   </div>`;
@@ -783,10 +795,10 @@ function getChartSpecs(list, tipo){
   const specCausaRaiz = { title:'Por causa raíz', kind:'bar', indexAxis:'y', labels: causaPairs.labels, data: causaPairs.data, colors:['#7A3B9E'] };
 
   if(tipo === 'ALL'){
-    const tipoLabels = Object.keys(TYPES);
+    const tipoLabels = [...NAV_ORDER_1, ...NAV_ORDER_PROACTIVOS].filter(k=>TYPES[k]);
     return { scope:'Todos los registros — diversidad de categorías', specs: [
       { title:'Registros por tipo', kind:'bar', indexAxis:'y', labels: tipoLabels.map(k=>TYPES[k].label),
-        data: tipoLabels.map(k=>list.filter(r=>r.tipo===k).length), colors: tipoLabels.map(k=>TYPES[k].color) },
+        data: tipoLabels.map(k=>list.filter(r=>r.tipo===k).length), colors: tipoLabels.map(k=>navDotColor(k)) },
       specEstado, specInstalacion, specCausaRaiz,
     ]};
   }
