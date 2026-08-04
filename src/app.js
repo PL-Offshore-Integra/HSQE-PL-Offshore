@@ -17,6 +17,20 @@ const TYPES = {
   CI:  {label:'Condición Insegura',  color:'#B07D0A'},
   SUG: {label:'Sugerencia de Mejora', color:'#0E7C86'},
 };
+// Frase para personalizar etiquetas por tipo: "Fecha del incidente", "Título de la sugerencia de mejora", etc.
+const TIPO_DESCRIPTOR = {
+  NC:  'de la no conformidad',
+  OBS: 'de la observación',
+  OM:  'de la oportunidad de mejora',
+  LA:  'de la lección aprendida',
+  ACC: 'del accidente personal',
+  INC: 'del incidente',
+  CUA: 'del cuasi accidente',
+  AI:  'del acto inseguro',
+  CI:  'de la condición insegura',
+  SUG: 'de la sugerencia de mejora',
+};
+function tipoDescriptor(tipo){ return TIPO_DESCRIPTOR[tipo] || 'del evento'; }
 const STATUS = {
   'Abierto':    '#C0392B',
   'En Proceso': '#B07D0A',
@@ -1122,7 +1136,7 @@ function openRecordForm(id){
           <div class="field"><label>Buque / Instalación</label>
             <select id="f_instalacion"></select>
           </div>
-          <div class="field"><label>Fecha del evento</label>
+          <div class="field"><label id="label_fecha">Fecha ${tipoDescriptor(tipo)}</label>
             <input type="date" id="f_fecha" value="${r?r.fecha:todayISO()}">
           </div>
         </div>
@@ -1186,13 +1200,13 @@ function openRecordForm(id){
         </div>
 
         <div class="section-title">Descripción</div>
-        <div class="field"><label>Título del evento</label>
-          <input type="text" id="f_titulo" value="${r?r.titulo||'':''}" placeholder="Título breve que resuma el evento" maxlength="120">
+        <div class="field"><label id="label_titulo">Título ${tipoDescriptor(tipo)}</label>
+          <input type="text" id="f_titulo" value="${r?r.titulo||'':''}" placeholder="Título breve y descriptivo" maxlength="120">
         </div>
         <div class="field"><label>Área / Departamento</label>
           <input type="text" id="f_area" value="${r?r.area||'':''}" placeholder="Ej: Cubierta, Sala de Máquinas, Puente">
         </div>
-        <div class="field" id="block_desc_simple"><label>Descripción del evento</label>
+        <div class="field" id="block_desc_simple"><label id="label_descripcion">Descripción ${tipoDescriptor(tipo)}</label>
           <textarea id="f_descripcion" placeholder="Detalle qué ocurrió, cómo y dónde">${r?r.descripcion||'':''}</textarea>
         </div>
         <div id="block_desc_inc">
@@ -1641,6 +1655,11 @@ function renderAccionesBlock(tipoAccion){
 }
 function toggleConditionalFields(){
   const tipo = document.getElementById('f_tipo').value;
+  const desc = tipoDescriptor(tipo);
+  const setLbl = (id, txt) => { const el = document.getElementById(id); if(el) el.textContent = txt; };
+  setLbl('label_fecha', 'Fecha ' + desc);
+  setLbl('label_titulo', 'Título ' + desc);
+  setLbl('label_descripcion', 'Descripción ' + desc);
   document.getElementById('block_ocimf').style.display = TIPOS_CON_OCIMF.includes(tipo) ? 'block' : 'none';
   document.getElementById('block_clasif_origen').style.display = TIPOS_CON_CLASIF_ORIGEN.includes(tipo) ? 'block' : 'none';
   document.getElementById('block_auditoria_nc').style.display = (tipo === 'NC') ? 'block' : 'none';
@@ -2575,7 +2594,7 @@ async function composeRecordBody(id){
 
     <table style="width:100%;border-collapse:collapse;margin-bottom:14px;">
       ${metaRow({l:'Empresa', v:co?co.name:'—'}, {l:'Instalación / Área', v:(r.instalacion||'—')+(r.area?' · '+r.area:'')})}
-      ${metaRow({l:'Fecha del evento', v:fmtDate(r.fecha)}, {l:'Severidad', v:r.severidad||'—'})}
+      ${metaRow({l:'Fecha '+tipoDescriptor(r.tipo), v:fmtDate(r.fecha)}, {l:'Severidad', v:r.severidad||'—'})}
       ${metaRow({l:'Estado actual', v:r.estado||'—'}, {l:'Responsable', v:resumenMeta.responsable})}
       ${metaRow({l:'Reportado por', v:r.reportado_por||'—'}, {l:'Fecha de vencimiento', v:(resumenMeta.vencimiento?fmtDate(resumenMeta.vencimiento):'—')+(isOverdue(r)?' ⚠ VENCIDA':'')})}
       ${metaRow({l:'Fecha de cierre', v:fmtDate(r.fecha_cierre)}, {l:'Referencia normativa', v:r.referencia_normativa||'—'})}
@@ -2605,7 +2624,7 @@ async function composeRecordBody(id){
   }
 
   // Descripción (guiada para Incidente; libre para el resto)
-  body += secH3(r.tipo==='INC' ? 'Descripción del Incidente' : 'Descripción del Evento');
+  body += secH3('Descripción ' + tipoDescriptor(r.tipo));
   body += r.tipo==='INC'
     ? INC_PREGUNTAS.map((q,i)=>{ const a = (r.inc_descripcion && r.inc_descripcion['q'+(i+1)]) ? r.inc_descripcion['q'+(i+1)] : ''; return `<p style="font-size:10.5pt;line-height:1.45;margin:0 0 7px;"><b>${i+1}. ${q}</b><br>${a || '—'}</p>`; }).join('')
     : `<p style="font-size:10.5pt;line-height:1.5;">${r.descripcion||'—'}</p>`;
