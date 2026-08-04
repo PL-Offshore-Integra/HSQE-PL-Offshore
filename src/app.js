@@ -43,12 +43,21 @@ const CLASIF_OCIMF = ['','LTI - Lesión con Tiempo Perdido','MTI - Lesión con T
 // Tipos que llevan Clasificación OCIMF/TMSA (solo Accidente e Incidente)
 const DEFAULT_LOGOS = {
   cleansea: "/cleansea.png",
-  ploffshore: "/PL.png",
+  ploffshore: "/PL_Offshore_Fondo_Blanco.png", // versión color/navy — para fondos claros (PDF)
+};
+// Versión BLANCA del logo, para fondos oscuros (barra lateral azul)
+const DEFAULT_LOGOS_WHITE = {
+  ploffshore: "/PL_Offshore_Blanco.png",
 };
 function guessDefaultLogo(companyName){
   const n = (companyName||'').toLowerCase();
   if(n.includes('clean')) return DEFAULT_LOGOS.cleansea;
   if(n.includes('offshore') || n.includes('parana') || n.includes('paraná')) return DEFAULT_LOGOS.ploffshore;
+  return null;
+}
+function guessWhiteLogo(companyName){
+  const n = (companyName||'').toLowerCase();
+  if(n.includes('offshore') || n.includes('parana') || n.includes('paraná')) return DEFAULT_LOGOS_WHITE.ploffshore;
   return null;
 }
 function getCompanyLogo(companyId){
@@ -997,7 +1006,14 @@ function renderBrandLogo(){
   const el = document.getElementById('brandLogo');
   if(!el) return;
   const co = DATA.companies[0];
-  const logo = co ? getCompanyLogo(co.id) : null;
+  if(!co){ el.innerHTML = ''; return; }
+  // En la barra lateral (fondo azul) se usa la versión blanca del logo, sin caja.
+  const white = guessWhiteLogo(co.name);
+  if(white){
+    el.innerHTML = `<img src="${white}" style="display:block;max-height:52px;max-width:190px;margin-bottom:12px;">`;
+    return;
+  }
+  const logo = getCompanyLogo(co.id);
   el.innerHTML = logo ? `<div class="brand-logo-box"><img src="${logo}"></div>` : '';
 }
 // Alterna entre el panel normal (KPIs, graficos, tabla) y la vista dedicada "KPI HSQE".
