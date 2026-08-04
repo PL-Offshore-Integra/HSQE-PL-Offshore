@@ -15,6 +15,7 @@ const TYPES = {
   CUA: {label:'Cuasi Accidente',     color:'#B07D0A'},
   AI:  {label:'Acto Inseguro',       color:'#B07D0A'},
   CI:  {label:'Condición Insegura',  color:'#B07D0A'},
+  SUG: {label:'Sugerencia de Mejora', color:'#0E7C86'},
 };
 const STATUS = {
   'Abierto':    '#C0392B',
@@ -66,7 +67,7 @@ let CLASIF_ORIGEN = ['','ISO','ISM','PNA','Inspección HSQE','Cliente','No Aplic
 // Oportunidad de Mejora y Lección Aprendida no llevan causa raíz/acción correctiva; llevan datos de comunicación
 // Solo Lección Aprendida no lleva causa raíz/acción correctiva; lleva datos de comunicación.
 // Oportunidad de Mejora se trata igual que Observación / No Conformidad (con causa raíz y acción correctiva).
-const TIPOS_SIN_CAUSA_ACCION = ['LA'];
+const TIPOS_SIN_CAUSA_ACCION = ['LA','SUG'];
 const MEDIOS_COMUNICACION = ['','Reunión de Seguridad','Correo Electrónico','Cartelera / Boletín HSQE','Charla de Seguridad (Toolbox Talk)','Sistema de Gestión (SGS)','Otro'];
 
 // Tipos que llevan campo "Lecciones Aprendidas" como parte del registro (Accidente / Incidente / Cuasi Accidente)
@@ -1312,8 +1313,51 @@ function openRecordForm(id){
           </div>
         </div>
 
+        <div id="block_sug_notificacion">
+          <div class="section-title" style="margin-top:18px;padding-top:10px;border-top:1px dashed var(--line);">Notificación</div>
+          <div class="field"><label>A quién comunicar</label>
+            <input type="text" id="f_sug_comunicar" value="${r?(r.sug_comunicar_a||'').replace(/"/g,'&quot;'):''}" placeholder="Ej: Jefes de Departamento, Tripulación">
+          </div>
+          <div class="field-row-3">
+            <div class="field"><label>A través de qué medio</label>
+              <select id="f_sug_medio">${MEDIOS_COMUNICACION.map(m=>`<option value="${m}" ${r&&r.sug_medio===m?'selected':''}>${m||'Seleccionar...'}</option>`).join('')}</select>
+            </div>
+            <div class="field"><label>En qué plazo</label>
+              <input type="text" id="f_sug_plazo" value="${r?(r.sug_plazo||'').replace(/"/g,'&quot;'):''}" placeholder="Ej: Próxima reunión, 7 días">
+            </div>
+            <div class="field"><label>Responsable de comunicar</label>
+              <input type="text" id="f_sug_resp_notif" list="personasDatalist" value="${r?(r.sug_resp_notif||'').replace(/"/g,'&quot;'):''}" placeholder="Nombre">
+            </div>
+          </div>
+        </div>
 
+        <div id="block_sug_seguimiento">
+          <div class="section-title" style="margin-top:18px;padding-top:10px;border-top:1px dashed var(--line);">Seguimiento</div>
+          <div class="field-row">
+            <div class="field"><label>Área responsable</label>
+              <input type="text" id="f_sug_area" value="${r?(r.sug_area||'').replace(/"/g,'&quot;'):''}" placeholder="Ej: Cubierta, HSQE, Operaciones">
+            </div>
+            <div class="field"><label>¿Se llevará a cabo?</label>
+              <select id="f_sug_realiza">${['','Sí','No'].map(o=>`<option value="${o}" ${r&&r.sug_realiza===o?'selected':''}>${o||'Seleccionar...'}</option>`).join('')}</select>
+            </div>
+          </div>
+          <div class="field-row-3">
+            <div class="field"><label>Responsable</label>
+              <input type="text" id="f_sug_resp" list="personasDatalist" value="${r?(r.responsable||'').replace(/"/g,'&quot;'):''}" placeholder="Nombre">
+            </div>
+            <div class="field"><label>Plazo (fecha límite)</label>
+              <input type="date" id="f_sug_plazo_seg" value="${r?r.fecha_vencimiento||'':''}">
+            </div>
+            <div class="field"><label>Estado de cierre</label>
+              <select id="f_sug_estado">${Object.keys(STATUS).map(s=>`<option ${r&&r.estado===s?'selected':''}>${s}</option>`).join('')}</select>
+            </div>
+          </div>
+          <div class="field"><label>Fecha de cierre</label>
+            <input type="date" id="f_sug_cierre" value="${r?r.fecha_cierre||'':''}">
+          </div>
+        </div>
 
+        <div id="block_gestion">
         <div class="section-title">Gestión</div>
         <div class="field-row">
           <div class="field" id="block_severidad"><label>Severidad</label>
@@ -1328,6 +1372,7 @@ function openRecordForm(id){
         </div>
         <div class="field"><label>Referencia normativa (ISM / ISO / SRT / MARPOL, etc.)</label>
           <input type="text" id="f_referencia" value="${r?r.referencia_normativa||'':''}" placeholder="Ej: ISM Cód. 9, ISO 45001 Cl. 10.2">
+        </div>
         </div>
 
         <div class="section-title">Adjuntos</div>
@@ -1549,9 +1594,13 @@ function toggleConditionalFields(){
   document.getElementById('block_ocimf').style.display = TIPOS_CON_OCIMF.includes(tipo) ? 'block' : 'none';
   document.getElementById('block_clasif_origen').style.display = TIPOS_CON_CLASIF_ORIGEN.includes(tipo) ? 'block' : 'none';
   document.getElementById('block_auditoria_nc').style.display = (tipo === 'NC') ? 'block' : 'none';
+  const esSug = (tipo === 'SUG');
   document.getElementById('block_causa_accion').style.display = TIPOS_SIN_CAUSA_ACCION.includes(tipo) ? 'none' : 'block';
-  document.getElementById('block_responsable_simple').style.display = TIPOS_SIN_CAUSA_ACCION.includes(tipo) ? 'grid' : 'none';
-  document.getElementById('block_comunicacion').style.display = TIPOS_SIN_CAUSA_ACCION.includes(tipo) ? 'block' : 'none';
+  document.getElementById('block_responsable_simple').style.display = (TIPOS_SIN_CAUSA_ACCION.includes(tipo) && !esSug) ? 'grid' : 'none';
+  document.getElementById('block_comunicacion').style.display = (TIPOS_SIN_CAUSA_ACCION.includes(tipo) && !esSug) ? 'block' : 'none';
+  document.getElementById('block_sug_notificacion').style.display = esSug ? 'block' : 'none';
+  document.getElementById('block_sug_seguimiento').style.display = esSug ? 'block' : 'none';
+  document.getElementById('block_gestion').style.display = esSug ? 'none' : 'block';
   document.getElementById('block_cuasi').style.display = (tipo === 'CUA') ? 'block' : 'none';
   document.getElementById('block_categoria_aici').style.display = (tipo === 'INC') ? 'block' : 'none';
   // Bloques exclusivos de Incidente: investigadores, condiciones ambientales y descripción guiada
@@ -1766,7 +1815,8 @@ async function saveRecord(){
   const tipoSel = get('f_tipo');
   const fechaSel = get('f_fecha');
   const tipoSinAcciones = TIPOS_SIN_CAUSA_ACCION.includes(tipoSel);
-  const estadoSel = get('f_estado');
+  const esSug = (tipoSel === 'SUG');
+  const estadoSel = esSug ? getIf('f_sug_estado') : get('f_estado');
   const esInc = (tipoSel === 'INC');
 
   // Descripción guiada del Incidente (8 preguntas). Se guarda como objeto q1..q8.
@@ -1791,6 +1841,11 @@ async function saveRecord(){
     .find(a => a.estado === 'Cerrado' && !a.fecha_cierre);
   if(accionCerradaSinFecha){
     showToast('Indicá la fecha de cierre de las acciones en estado "Cerrado"');
+    return;
+  }
+
+  if(esSug && estadoSel === 'Cerrado' && !getIf('f_sug_cierre')){
+    showToast('Indicá la fecha de cierre de la sugerencia (estado "Cerrado")');
     return;
   }
 
@@ -1844,10 +1899,16 @@ async function saveRecord(){
     comunicar_a: getIf('f_comunicar_a'),
     medio_comunicacion: getIf('f_medio_comunicacion'),
     plazo_comunicacion: getIf('f_plazo_comunicacion'),
-    responsable: tipoSinAcciones ? get('f_responsable') : '',
-    fecha_vencimiento: tipoSinAcciones ? get('f_vencimiento') : '',
-    fecha_cierre: get('f_cierre'),
+    responsable: esSug ? getIf('f_sug_resp') : (tipoSinAcciones ? get('f_responsable') : ''),
+    fecha_vencimiento: esSug ? getIf('f_sug_plazo_seg') : (tipoSinAcciones ? get('f_vencimiento') : ''),
+    fecha_cierre: esSug ? getIf('f_sug_cierre') : get('f_cierre'),
     referencia_normativa: get('f_referencia'),
+    sug_comunicar_a: esSug ? getIf('f_sug_comunicar') : '',
+    sug_medio: esSug ? getIf('f_sug_medio') : '',
+    sug_plazo: esSug ? getIf('f_sug_plazo') : '',
+    sug_resp_notif: esSug ? getIf('f_sug_resp_notif') : '',
+    sug_area: esSug ? getIf('f_sug_area') : '',
+    sug_realiza: esSug ? getIf('f_sug_realiza') : '',
     adjuntos: JSON.parse(JSON.stringify(modalAttachments)),
   };
   if(!rec.fecha || !rec.titulo || !rec.descripcion){
@@ -1876,6 +1937,7 @@ async function saveRecord(){
   }
   registrarPersonaSiEsNueva(rec.reportado_nombre);
   registrarPersonaSiEsNueva(rec.responsable);
+  registrarPersonaSiEsNueva(rec.sug_resp_notif);
   [...rec.acciones_correctivas, ...rec.acciones_preventivas].forEach(a => registrarPersonaSiEsNueva(a.responsable));
   const nuevasLA = manageLeccionesAprendidas(rec);
   const cambiados = [rec];
@@ -2495,6 +2557,20 @@ async function composeRecordBody(id){
   body += r.tipo==='INC'
     ? INC_PREGUNTAS.map((q,i)=>{ const a = (r.inc_descripcion && r.inc_descripcion['q'+(i+1)]) ? r.inc_descripcion['q'+(i+1)] : ''; return `<p style="font-size:10.5pt;line-height:1.45;margin:0 0 7px;"><b>${i+1}. ${q}</b><br>${a || '—'}</p>`; }).join('')
     : `<p style="font-size:10.5pt;line-height:1.5;">${r.descripcion||'—'}</p>`;
+
+  if(r.tipo==='SUG'){
+    if(r.sug_comunicar_a || r.sug_medio || r.sug_plazo || r.sug_resp_notif){
+      body += secH3('Notificación');
+      body += `<p style="font-size:10.5pt;margin:0 0 4px;"><b>A quién comunicar:</b> ${r.sug_comunicar_a||'—'}</p>`;
+      body += `<p style="font-size:10.5pt;margin:0 0 4px;"><b>Medio:</b> ${r.sug_medio||'—'} &nbsp;·&nbsp; <b>Plazo:</b> ${r.sug_plazo||'—'} &nbsp;·&nbsp; <b>Responsable:</b> ${r.sug_resp_notif||'—'}</p>`;
+    }
+    body += secH3('Seguimiento');
+    body += `<table style="width:100%;border-collapse:collapse;margin-bottom:10px;">
+      ${metaRow({l:'Área responsable', v:r.sug_area||'—'}, {l:'¿Se llevará a cabo?', v:r.sug_realiza||'—'})}
+      ${metaRow({l:'Responsable', v:r.responsable||'—'}, {l:'Plazo (fecha límite)', v:fmtDate(r.fecha_vencimiento)})}
+      ${metaRow({l:'Estado de cierre', v:r.estado||'—'}, {l:'Fecha de cierre', v:fmtDate(r.fecha_cierre)})}
+    </table>`;
+  }
 
   if(TIPOS_CON_OCIMF.includes(r.tipo) && r.clasificacion){
     body += `<h3 style="font-family:Arial;font-size:12pt;color:${NAVY};border-bottom:2px solid ${ORANGE};padding-bottom:3px;">Clasificación OCIMF/TMSA</h3><p style="font-size:10.5pt;">${r.clasificacion}${r.incluir_kpi?' <i>(incluido en KPI OCIMF)</i>':''}</p>`;
