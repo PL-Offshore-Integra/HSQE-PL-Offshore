@@ -119,6 +119,17 @@ let CARGOS = ['','Capitán','Primer Oficial de Cubierta','Segundo Oficial de Cub
   'Jefe de Máquinas','Primer Oficial de Máquinas','Oficial de Máquinas','Contramaestre','Marinero','Engrasador',
   'Electricista','Cocinero','Camarero','Oficial de Seguridad / HSQE','Superintendente','DPA','Personal de tierra','Otros'];
 
+// Devuelve las opciones <option> del desplegable de cargos (desde el catálogo editable).
+function cargosDisponibles(){
+  return (DATA.catalogos && Array.isArray(DATA.catalogos.cargos)) ? DATA.catalogos.cargos.slice() : CARGOS.slice();
+}
+function cargoOptionsHtml(selected){
+  const list = cargosDisponibles();
+  const sel = selected || '';
+  if(sel && !list.includes(sel)) list.push(sel); // conserva un cargo viejo aunque no esté en la lista
+  return list.map(c=>`<option value="${(c||'').replace(/"/g,'&quot;')}" ${sel===c?'selected':''}>${c||'— Seleccionar —'}</option>`).join('');
+}
+
 
 const TIPO_LESION = ['',
   'Contusiones','Escoriaciones','Heridas cortantes','Heridas punzantes','Heridas contuso/anfractuosas',
@@ -1083,9 +1094,10 @@ function openRecordForm(id){
   // Reportado por (nombre + cargo). Compatibilidad con registros viejos que guardaban "Nombre / Cargo".
   const repNombre = r ? (r.reportado_nombre != null ? r.reportado_nombre : ((r.reportado_por||'').split('/')[0]||'').trim()) : '';
   const repCargo  = r ? (r.reportado_cargo  != null ? r.reportado_cargo  : ((r.reportado_por||'').split('/').slice(1).join('/')||'').trim()) : '';
-  const cargosList = (DATA.catalogos && Array.isArray(DATA.catalogos.cargos)) ? DATA.catalogos.cargos.slice() : CARGOS.slice();
-  if(repCargo && !cargosList.includes(repCargo)) cargosList.push(repCargo);
-  const cargoOptions = cargosList.map(c=>`<option value="${(c||'').replace(/"/g,'&quot;')}" ${repCargo===c?'selected':''}>${c||'— Seleccionar —'}</option>`).join('');
+  const cargoOptions = cargoOptionsHtml(repCargo);
+  // Investigador líder (Incidente): nombre + cargo, con compatibilidad "Nombre / Cargo" heredado
+  const liderNombre = r ? (r.investigador_lider_nombre != null ? r.investigador_lider_nombre : ((r.investigador_lider||'').split('/')[0]||'').trim()) : '';
+  const liderCargo  = r ? (r.investigador_lider_cargo  != null ? r.investigador_lider_cargo  : ((r.investigador_lider||'').split('/').slice(1).join('/')||'').trim()) : '';
 
   const overlay = document.createElement('div');
   overlay.className='modal-overlay';
@@ -1127,8 +1139,13 @@ function openRecordForm(id){
 
         <div id="block_investigadores">
           <div class="section-title" style="margin-top:14px;">Investigadores</div>
-          <div class="field"><label>Investigador líder <span style="font-weight:400;color:var(--graphite-light);">(nombre / cargo)</span></label>
-            <input type="text" id="f_investigador_lider" list="personasDatalist" value="${r?r.investigador_lider||'':''}" placeholder="Ej: María Gómez / Oficial de Seguridad">
+          <div class="field-row">
+            <div class="field"><label>Investigador líder — Nombre</label>
+              <input type="text" id="f_investigador_lider_nombre" list="personasDatalist" value="${liderNombre.replace(/"/g,'&quot;')}" placeholder="Ej: María Gómez">
+            </div>
+            <div class="field"><label>Cargo</label>
+              <select id="f_investigador_lider_cargo">${cargoOptionsHtml(liderCargo)}</select>
+            </div>
           </div>
           <div class="section-title with-btn" style="margin-top:8px;">
             <span style="font-size:12.5px;">Investigadores adicionales</span>
@@ -1536,7 +1553,7 @@ function renderInvestigadoresList(){
         <input type="text" list="personasDatalist" value="${(inv.nombre||'').replace(/"/g,'&quot;')}" placeholder="Nombre" oninput="updateInvestigadorField(${i},'nombre',this.value)">
       </div>
       <div class="field"><label style="font-size:11px;">Cargo</label>
-        <input type="text" value="${(inv.cargo||'').replace(/"/g,'&quot;')}" placeholder="Cargo" oninput="updateInvestigadorField(${i},'cargo',this.value)">
+        <select onchange="updateInvestigadorField(${i},'cargo',this.value)">${cargoOptionsHtml(inv.cargo)}</select>
       </div>
       <button class="btn secondary" style="padding:6px 10px;color:var(--red);" onclick="removeInvestigador(${i})">✕</button>
     </div>`).join('');
@@ -1895,7 +1912,9 @@ async function saveRecord(){
     reportado_nombre: get('f_reportado_nombre').trim(),
     reportado_cargo: getIf('f_reportado_cargo'),
     reportado_por: (get('f_reportado_nombre').trim() + (getIf('f_reportado_cargo') ? ' / ' + getIf('f_reportado_cargo') : '')),
-    investigador_lider: esInc ? get('f_investigador_lider') : '',
+    investigador_lider_nombre: esInc ? getIf('f_investigador_lider_nombre').trim() : '',
+    investigador_lider_cargo: esInc ? getIf('f_investigador_lider_cargo') : '',
+    investigador_lider: esInc ? (getIf('f_investigador_lider_nombre').trim() + (getIf('f_investigador_lider_cargo') ? ' / ' + getIf('f_investigador_lider_cargo') : '')) : '',
     investigadores: esInc ? JSON.parse(JSON.stringify(modalInvestigadores.filter(i => (i.nombre||'').trim() || (i.cargo||'').trim()))) : [],
     fuerza_viento: esInc ? getIf('f_fuerza_viento') : '',
     estado_mar: esInc ? getIf('f_estado_mar') : '',
