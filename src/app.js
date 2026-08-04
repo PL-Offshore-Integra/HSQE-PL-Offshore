@@ -380,8 +380,10 @@ function renderSiteSelect(){
 function setSiteFilter(v){ currentSiteFilter = v; renderAll(); }
 
 // Orden y agrupación del menú lateral de categorías
-const NAV_ORDER_1 = ['NC','OBS','OM','INC','ACC','CUA','LA'];
+const NAV_GROUP_HALLAZGOS = ['NC','OBS','OM'];
+const NAV_GROUP_EVENTOS = ['INC','ACC','CUA','LA'];
 const NAV_ORDER_PROACTIVOS = ['AI','CI','SUG'];
+const NAV_ORDER_ALL_TYPES = [...NAV_GROUP_HALLAZGOS, ...NAV_GROUP_EVENTOS, ...NAV_ORDER_PROACTIVOS];
 // Color del punto/bullet en el menú (independiente del color del tipo en tablas/gráficos)
 const NAV_DOT_COLORS = {
   ALL:'#FFFFFF',
@@ -395,13 +397,16 @@ function renderTypeNav(){
   const wrap = document.getElementById('typeNav');
   const filtered = filteredRecords(true);
   const count = k => filtered.filter(r=>r.tipo===k).length;
-  let html = `<div class="nav-label">Categorías</div>`;
+  const group = arr => arr.filter(k=>TYPES[k]).map(k=>navItem(k, TYPES[k].label, navDotColor(k), count(k))).join('');
+  const label = (t, mt) => `<div class="nav-label" style="margin-top:${mt||0}px;">${t}</div>`;
+  let html = label('Categorías');
   html += navItem('ALL', 'Todos los registros', navDotColor('ALL'), filtered.length);
-  NAV_ORDER_1.forEach(k=>{ if(TYPES[k]) html += navItem(k, TYPES[k].label, navDotColor(k), count(k)); });
-  html += `<div class="nav-label" style="margin-top:12px;">Reportes Proactivos</div>`;
-  NAV_ORDER_PROACTIVOS.forEach(k=>{ if(TYPES[k]) html += navItem(k, TYPES[k].label, navDotColor(k), count(k)); });
-  html += `<div class="nav-item ${currentTypeFilter==='KPI'?'active':''}" onclick="setTypeFilter('KPI')" style="margin-top:6px;">
-    <span class="nav-dot" style="background:#0A3A66"></span>KPI HSQE
+  html += label('Hallazgos', 12) + group(NAV_GROUP_HALLAZGOS);
+  html += label('Reporte de Eventos', 12) + group(NAV_GROUP_EVENTOS);
+  html += label('Reportes Proactivos', 12) + group(NAV_ORDER_PROACTIVOS);
+  html += label('Objetivos', 12);
+  html += `<div class="nav-item ${currentTypeFilter==='KPI'?'active':''}" onclick="setTypeFilter('KPI')">
+    <span class="nav-dot" style="background:#2ECC71"></span>KPI HSQE
   </div>`;
   wrap.innerHTML = html;
 }
@@ -795,7 +800,7 @@ function getChartSpecs(list, tipo){
   const specCausaRaiz = { title:'Por causa raíz', kind:'bar', indexAxis:'y', labels: causaPairs.labels, data: causaPairs.data, colors:['#7A3B9E'] };
 
   if(tipo === 'ALL'){
-    const tipoLabels = [...NAV_ORDER_1, ...NAV_ORDER_PROACTIVOS].filter(k=>TYPES[k]);
+    const tipoLabels = NAV_ORDER_ALL_TYPES.filter(k=>TYPES[k]);
     return { scope:'Todos los registros — diversidad de categorías', specs: [
       { title:'Registros por tipo', kind:'bar', indexAxis:'y', labels: tipoLabels.map(k=>TYPES[k].label),
         data: tipoLabels.map(k=>list.filter(r=>r.tipo===k).length), colors: tipoLabels.map(k=>navDotColor(k)) },
