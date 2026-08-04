@@ -886,7 +886,20 @@ function getChartSpecs(list, tipo){
   if(tipo === 'AI' || tipo === 'CI'){
     return { scope: TYPES[tipo].label, specs: [ specSeveridad, specEstado, specCausaRaiz ] };
   }
-  return { scope: TYPES[tipo].label, specs: [ specSeveridad, specEstado, specInstalacion ] };
+  // Sugerencia de Mejora: no lleva severidad ni causa raíz.
+  if(tipo === 'SUG'){
+    return { scope: TYPES[tipo].label, specs: [
+      { title:'¿Se llevará a cabo?', kind:'doughnut', labels:['Sí','No','Sin definir'],
+        data:[ list.filter(r=>r.sug_realiza==='Sí').length, list.filter(r=>r.sug_realiza==='No').length, list.filter(r=>!r.sug_realiza).length ],
+        colors:['#1E7A4A','#C0392B','#8B96A1'] },
+      specEstado, specInstalacion,
+    ]};
+  }
+  // Fallback: la severidad solo se muestra en los tipos que la usan.
+  const finalSpecs = TIPOS_CON_SEVERIDAD.includes(tipo)
+    ? [ specSeveridad, specEstado, specInstalacion ]
+    : [ specEstado, specInstalacion ];
+  return { scope: TYPES[tipo].label, specs: finalSpecs };
 }
 
 // Divide etiquetas largas en varias lineas para que no se corten en el eje.
