@@ -2594,7 +2594,10 @@ async function composeRecordBody(id){
     {l:'Fecha '+tipoDescriptor(r.tipo), v:fmtDate(r.fecha)},
   ];
   if(TIPOS_CON_SEVERIDAD.includes(r.tipo)) metaCells.push({l:'Severidad', v:r.severidad||'—'});
-  else if(r.tipo==='SUG') metaCells.push({l:'¿Se llevará a cabo?', v:r.sug_realiza||'—'});
+  else if(r.tipo==='SUG'){
+    metaCells.push({l:'¿Se llevará a cabo?', v:r.sug_realiza||'—'});
+    metaCells.push({l:'Área responsable', v:r.sug_area||'—'});
+  }
   metaCells.push({l:'Estado actual', v:r.estado||'—'});
   metaCells.push({l:'Responsable', v:resumenMeta.responsable});
   metaCells.push({l:'Reportado por', v:r.reportado_por||'—'});
@@ -2661,12 +2664,6 @@ async function composeRecordBody(id){
       body += `<p style="font-size:10.5pt;margin:0 0 4px;"><b>A quién comunicar:</b> ${r.sug_comunicar_a||'—'}</p>`;
       body += `<p style="font-size:10.5pt;margin:0 0 4px;"><b>Medio:</b> ${r.sug_medio||'—'} &nbsp;·&nbsp; <b>Plazo:</b> ${r.sug_plazo||'—'} &nbsp;·&nbsp; <b>Responsable:</b> ${r.sug_resp_notif||'—'}</p>`;
     }
-    body += secH3('Seguimiento');
-    body += `<table style="width:100%;border-collapse:collapse;margin-bottom:10px;">
-      ${metaRow({l:'Área responsable', v:r.sug_area||'—'}, {l:'¿Se llevará a cabo?', v:r.sug_realiza||'—'})}
-      ${metaRow({l:'Responsable', v:r.responsable||'—'}, {l:'Plazo (fecha límite)', v:fmtDate(r.fecha_vencimiento)})}
-      ${metaRow({l:'Estado de cierre', v:r.estado||'—'}, {l:'Fecha de cierre', v:fmtDate(r.fecha_cierre)})}
-    </table>`;
   }
 
   if(TIPOS_CON_OCIMF.includes(r.tipo) && r.clasificacion){
