@@ -63,6 +63,22 @@ const EN = {
   'Acciones vencidas':'Overdue actions','Acciones por vencer (30 días)':'Actions due (30 days)',
   // Firma
   'Visado por Responsable HSQE / DPA':'Approved by HSQE/DPA Manager',
+  // Rótulos de la tabla superior (datos)
+  'Cliente / Operación':'Client / Operation','Instalación / Área':'Site / Area','Severidad':'Severity',
+  'Estado actual':'Current status','Responsable':'Responsible','Reportado por':'Reported by',
+  'Fecha de vencimiento':'Due date','Fecha de cierre':'Closing date','Referencia normativa':'Regulatory reference',
+  'Área responsable':'Responsible area',
+  // Fecha por tipo
+  'Fecha del evento':'Event date','Fecha del incidente':'Incident date','Fecha del accidente personal':'Personal accident date',
+  'Fecha del cuasi accidente':'Near miss date','Fecha de la no conformidad':'Non-conformity date','Fecha de la observación':'Observation date',
+  'Fecha de la oportunidad de mejora':'Improvement opportunity date','Fecha de la lección aprendida':'Lesson learned date',
+  'Fecha del acto inseguro':'Unsafe act date','Fecha de la condición insegura':'Unsafe condition date','Fecha de la sugerencia de mejora':'Improvement suggestion date',
+  // Condiciones del incidente
+  'Fuerza del viento':'Wind force','Estado del mar':'Sea state','Fuente de luz':'Light source',
+  'Temperatura exterior (°C)':'Outside temperature (°C)','Temperatura ambiente (°C)':'Ambient temperature (°C)',
+  'Rumbo (verdadero, °)':'Heading (true, °)','Velocidad (nudos)':'Speed (knots)',
+  // Acciones
+  'Acciones Correctivas':'Corrective Actions','Acciones Preventivas':'Preventive Actions',
 };
 // Devuelve "Español <i>English</i>" si hay traducción; si no, solo el español.
 function bilingual(es){
@@ -2492,7 +2508,7 @@ async function printChartsReport(){
   let kpiHtmlBil = kpiHtml;
   const KPI_TR = {'Registros totales':'Total records','Abiertas / en curso':'Open / in progress','Acciones vencidas':'Overdue actions','Acciones por vencer (30 días)':'Actions due (30 days)'};
   Object.keys(KPI_TR).forEach(es=>{ kpiHtmlBil = kpiHtmlBil.split(es).join(`${es} <span style="font-style:italic;color:#9AA6B2;font-weight:normal;">${KPI_TR[es]}</span>`); });
-  const TH_TR = {'Tipo':'Type','Instalación':'Site','Fecha':'Date','Título':'Title','Estado':'Status','Vencimiento':'Due date','Responsable':'Owner','Adj.':'Att.'};
+  const TH_TR = {'Tipo':'Type','Instalación':'Site','Fecha':'Date','Título':'Title','Estado':'Status','Vencimiento':'Due date','Responsable':'Responsible','Adj.':'Att.'};
   Object.keys(TH_TR).forEach(es=>{ tableHtml = tableHtml.replace(new RegExp('<th([^>]*)>\\s*'+es+'\\s*</th>','g'), `<th$1>${es} <span style="font-style:italic;color:#9AA6B2;font-weight:normal;">${TH_TR[es]}</span></th>`); });
 
   container.innerHTML = `<div class="pr-record">
@@ -2663,8 +2679,8 @@ async function composeRecordBody(id){
   const NAVY='#002247', ORANGE='#0A3A66', GRAPH='#5B6671', LINE='#DBE0E6';
 
   const metaRow = (a,b) => `<tr>
-    <td style="border:1px solid ${LINE};padding:6px 10px;width:33%;"><div style="font-size:8pt;text-transform:uppercase;color:${GRAPH};letter-spacing:0.5pt;">${a.l}</div><div style="font-size:10.5pt;color:${NAVY};font-weight:bold;">${a.v}</div></td>
-    <td style="border:1px solid ${LINE};padding:6px 10px;width:33%;"><div style="font-size:8pt;text-transform:uppercase;color:${GRAPH};letter-spacing:0.5pt;">${b.l}</div><div style="font-size:10.5pt;color:${NAVY};font-weight:bold;">${b.v}</div></td>
+    <td style="border:1px solid ${LINE};padding:6px 10px;width:33%;"><div style="font-size:8pt;text-transform:uppercase;color:${GRAPH};letter-spacing:0.5pt;">${bilingual(a.l)}</div><div style="font-size:10.5pt;color:${NAVY};font-weight:bold;">${a.v}</div></td>
+    <td style="border:1px solid ${LINE};padding:6px 10px;width:33%;"><div style="font-size:8pt;text-transform:uppercase;color:${GRAPH};letter-spacing:0.5pt;">${bilingual(b.l)}</div><div style="font-size:10.5pt;color:${NAVY};font-weight:bold;">${b.v}</div></td>
   </tr>`;
 
   const resumenMeta = accionesResumen(r);
@@ -2793,8 +2809,8 @@ async function composeRecordBody(id){
       ${r.tipificacion_causa?`<p style="font-size:10.5pt;"><b>Tipificación de la causa raíz:</b> ${r.tipificacion_causa}${r.tipificacion_causa==='Otros' && r.tipificacion_causa_otro ? ' — '+r.tipificacion_causa_otro : ''}</p>`:''}
       ${r.causa_raiz?`<p style="font-size:10.5pt;"><b>Descripción de causas:</b> ${r.causa_raiz}</p>`:''}`;
     const accionRow = (titulo, lista) => {
-      if(!lista || lista.length===0) return `<p style="font-size:10.5pt;"><b>${titulo}:</b> sin acciones cargadas.</p>`;
-      return `<p style="font-size:10.5pt;margin-bottom:2px;"><b>${titulo}:</b></p>` + lista.map((a,i)=>
+      if(!lista || lista.length===0) return `<p style="font-size:10.5pt;"><b>${bilingual(titulo)}:</b> sin acciones cargadas.</p>`;
+      return `<p style="font-size:10.5pt;margin-bottom:2px;"><b>${bilingual(titulo)}:</b></p>` + lista.map((a,i)=>
         `<p style="font-size:10pt;margin:0 0 6px 12px;">${i+1}. ${a.descripcion||'—'} <br>
           <span style="font-size:9pt;color:${GRAPH};">Responsable: ${a.responsable||'—'} · Vencimiento: ${fmtDate(a.vencimiento)} · Estado: ${a.estado||'—'}${a.estado==='Cerrado' && a.fecha_cierre ? ' · Cierre: '+fmtDate(a.fecha_cierre) : ''}</span>
         </p>`).join('');
