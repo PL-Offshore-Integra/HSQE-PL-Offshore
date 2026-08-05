@@ -157,7 +157,7 @@
        que produce hojas en blanco al final del printable. */
     .sidebar, .main, #toast{ display:none !important; }
     .app{ display:block !important; min-height:0 !important; background:#fff !important; }
-    #printReport{ display:block !important; }
+    #printReport{ display:block !important; padding:8mm !important; }
     /* KPIs y gráficos: layout ordenado para impresión */
     #printReport .kpi-row{ grid-template-columns:repeat(4,1fr) !important; }
     #printReport .chart-row{ grid-template-columns:1fr 1fr !important; gap:12px !important; }
