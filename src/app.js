@@ -144,6 +144,18 @@ function cargoOptionsHtml(selected){
   return list.map(c=>`<option value="${(c||'').replace(/"/g,'&quot;')}" ${sel===c?'selected':''}>${c||'— Seleccionar —'}</option>`).join('');
 }
 
+// Cliente / Operación (catálogo editable)
+let CLIENTES = ['','Operación propia','N/A'];
+function clientesDisponibles(){
+  return (DATA.catalogos && Array.isArray(DATA.catalogos.clientes)) ? DATA.catalogos.clientes.slice() : CLIENTES.slice();
+}
+function clienteOptionsHtml(selected){
+  const list = clientesDisponibles();
+  const sel = selected || '';
+  if(sel && !list.includes(sel)) list.push(sel);
+  return list.map(c=>`<option value="${(c||'').replace(/"/g,'&quot;')}" ${sel===c?'selected':''}>${c||'— Seleccionar —'}</option>`).join('');
+}
+
 
 const TIPO_LESION = ['',
   'Contusiones','Escoriaciones','Heridas cortantes','Heridas punzantes','Heridas contuso/anfractuosas',
@@ -170,6 +182,7 @@ let presetCategoriaEvento = null;
 let DATA = { companies: [], records: [], visadores: [] };
 let currentTypeFilter = 'ALL';
 let currentSiteFilter = 'ALL';
+let currentClienteFilter = 'ALL';
 
 /* ============ USUARIO ACTUAL Y VISADO (Responsable HSQE/DPA) ============ */
 let CURRENT_USER = null; // email de la sesión activa (se setea en initApp)
@@ -303,6 +316,7 @@ function ensureCatalogos(){
   if(!Array.isArray(c.tipificacionIncidente)) c.tipificacionIncidente = TIPIFICACION_INCIDENTE.slice();
   if(!Array.isArray(c.tipificacionCausaRaiz)) c.tipificacionCausaRaiz = TIPIFICACION_CAUSA_RAIZ.slice();
   if(!Array.isArray(c.cargos)) c.cargos = CARGOS.slice();
+  if(!Array.isArray(c.clientes)) c.clientes = CLIENTES.slice();
   if(!c.dotacionMensual || typeof c.dotacionMensual !== 'object' || Array.isArray(c.dotacionMensual)) c.dotacionMensual = {};
   ordenarAlfa(c.personas);
   ordenarAlfa(c.clasifOrigen);
@@ -311,6 +325,7 @@ function ensureCatalogos(){
   ordenarAlfa(c.tipificacionIncidente);
   ordenarAlfa(c.tipificacionCausaRaiz);
   ordenarAlfa(c.cargos);
+  ordenarAlfa(c.clientes);
   if(DATA.companies[0]) ordenarAlfa(DATA.companies[0].vessels);
   CLASIF_ORIGEN = c.clasifOrigen;
   CATEGORIAS_ACTO_INSEGURO = c.categoriasActoInseguro;
@@ -318,6 +333,7 @@ function ensureCatalogos(){
   TIPIFICACION_INCIDENTE = c.tipificacionIncidente;
   TIPIFICACION_CAUSA_RAIZ = c.tipificacionCausaRaiz;
   CARGOS = c.cargos;
+  CLIENTES = c.clientes;
 }
 function seedDefaults(){
   DATA.companies = [
@@ -411,6 +427,18 @@ function renderSiteSelect(){
     sitios.map(v=>`<option value="${v}">${v}</option>`).join('');
   sel.value = currentSiteFilter;
 }
+function renderClienteSelect(){
+  const sel = document.getElementById('clienteFilter');
+  if(!sel) return;
+  // Clientes: los del catálogo + los que ya aparecen en registros (por si alguno quedó fuera del catálogo)
+  const cat = clientesDisponibles().filter(c=>c);
+  const enUso = [...new Set(DATA.records.map(r=>r.cliente_operacion).filter(Boolean))];
+  const todos = [...new Set([...cat, ...enUso])].sort((a,b)=>a.localeCompare(b,'es'));
+  sel.innerHTML = `<option value="ALL">Todos los clientes / operaciones</option>` +
+    todos.map(v=>`<option value="${v.replace(/"/g,'&quot;')}">${v}</option>`).join('');
+  sel.value = currentClienteFilter;
+}
+function setClienteFilter(v){ currentClienteFilter = v; renderAll(); }
 function setSiteFilter(v){ currentSiteFilter = v; renderAll(); }
 
 // Orden y agrupación del menú lateral de categorías
@@ -455,7 +483,7 @@ function setTypeFilter(k){ currentTypeFilter = k; renderAll(); }
 function clearFilters(){
   document.getElementById('searchBox').value='';
   document.getElementById('statusFilter').value='';
-  document.getElementById('sevFilter').value='';
+  const sf = document.getElementById('sevFilter'); if(sf) sf.value='';
   document.getElementById('overdueFilter').value='';
   const df = document.getElementById('dateFrom'); if(df) df.value='';
   const dt = document.getElementById('dateTo'); if(dt) dt.value='';
@@ -465,6 +493,7 @@ function clearFilters(){
 /* ============ FILTERING ============ */
 function filteredRecords(bySiteOnly){
   let r = DATA.records.filter(x => currentSiteFilter==='ALL' || x.instalacion===currentSiteFilter);
+  if(currentClienteFilter!=='ALL') r = r.filter(x => (x.cliente_operacion||'') === currentClienteFilter);
   if(!bySiteOnly && currentTypeFilter!=='ALL') r = r.filter(x=>x.tipo===currentTypeFilter);
   return r;
 }
@@ -1082,6 +1111,7 @@ function setKpiViewMode(kpiMode){
 function renderAll(){
   renderBrandLogo();
   renderSiteSelect();
+  renderClienteSelect();
   renderTypeNav();
 
   // Solo un Responsable HSQE/DPA habilitado (visador) ve "Gestionar catálogos"
@@ -1141,8 +1171,8 @@ function openRecordForm(id){
           <div class="field"><label>Tipo de evento</label>
             <select id="f_tipo">${Object.keys(TYPES).map(k=>`<option value="${k}" ${k===tipo?'selected':''}>${TYPES[k].label}</option>`).join('')}</select>
           </div>
-          <div class="field"><label>Empresa</label>
-            <select id="f_empresa" onchange="updateVesselOptions()">${DATA.companies.map(c=>`<option value="${c.id}" ${c.id===co?'selected':''}>${c.name}</option>`).join('')}</select>
+          <div class="field"><label>Cliente / Operación</label>
+            <select id="f_cliente">${clienteOptionsHtml(r?r.cliente_operacion:'')}</select>
           </div>
         </div>
         <div class="field-row">
@@ -1810,8 +1840,7 @@ function renderAttachmentsList(){
     </span>`).join('');
 }
 function updateVesselOptions(preset){
-  const coId = document.getElementById('f_empresa').value;
-  const co = DATA.companies.find(c=>c.id===coId);
+  const co = DATA.companies[0];
   const sel = document.getElementById('f_instalacion');
   sel.innerHTML = (co?co.vessels:[]).map(v=>`<option value="${v}" ${v===preset?'selected':''}>${v}</option>`).join('');
 }
@@ -1934,7 +1963,8 @@ async function saveRecord(){
   const rec = {
     id: editingId || generateRecordId(tipoSel, fechaSel),
     tipo: tipoSel,
-    empresa_id: get('f_empresa'),
+    empresa_id: (DATA.companies[0] ? DATA.companies[0].id : ''),
+    cliente_operacion: getIf('f_cliente'),
     instalacion: get('f_instalacion'),
     fecha: fechaSel,
     area: get('f_area'),
@@ -2301,6 +2331,9 @@ function renderCatalogManager(){
     catalogSectionHtml('Cargos (Reportado por)',
       'Opciones del desplegable "Cargo" en el campo "Reportado por".',
       'cargos', cat.cargos.filter(c=>c)) +
+    catalogSectionHtml('Cliente / Operación',
+      'Opciones del desplegable "Cliente / Operación" de cada registro. También sirve como filtro en todas las secciones.',
+      'clientes', (cat.clientes||[]).filter(c=>c)) +
     catalogSectionHtml('Tipificación — Incidente',
       'Opciones disponibles al reportar un Incidente (daño a la carga, al buque, derrame, etc.).',
       'tipificacionIncidente', cat.tipificacionIncidente) +
@@ -2449,6 +2482,10 @@ async function printChartsReport(){
     }));
   }catch(e){ /* seguimos igual con la impresión */ }
   await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+  // Portada/gráficos: imprimir en horizontal (A4 landscape) para leer mejor la tabla.
+  let orient = document.getElementById('__pageOrient');
+  if(!orient){ orient = document.createElement('style'); orient.id = '__pageOrient'; document.head.appendChild(orient); }
+  orient.textContent = '@page{ size: A4 landscape; margin: 10mm; }';
   window.print();
 }
 
@@ -2529,7 +2566,7 @@ function printCompanyReport(){
   container.innerHTML = html;
   window.print();
 }
-window.addEventListener('afterprint', ()=>{ document.getElementById('printReport').innerHTML = ''; });
+window.addEventListener('afterprint', ()=>{ document.getElementById('printReport').innerHTML = ''; const o = document.getElementById('__pageOrient'); if(o) o.remove(); });
 
 /* ============ IMPRESIÓN DE REGISTRO INDIVIDUAL ============ */
 // Convierte el logo a base64 para incrustarlo dentro del .doc (autocontenido).
@@ -2589,7 +2626,7 @@ async function composeRecordBody(id){
 
   // Tabla de datos: la severidad solo aparece en los tipos que la usan.
   const metaCells = [
-    {l:'Empresa', v:co?co.name:'—'},
+    {l:'Cliente / Operación', v:r.cliente_operacion||'—'},
     {l:'Instalación / Área', v:(r.instalacion||'—')+(r.area?' · '+r.area:'')},
     {l:'Fecha '+tipoDescriptor(r.tipo), v:fmtDate(r.fecha)},
   ];
@@ -2908,7 +2945,7 @@ async function printRecordPDF(id){
 }
 
 /* ============ INIT ============ */
-Object.assign(window, { addAccion, addAttachmentFile, addAttachmentManual, addCatalogItem, addDotacionMes, addInvestigador, addLeccion, addVessel, addVisador, clearFilters, closeModal, deleteRecord, exportData, printRecordPDF, openAttachment, openCatalogManager, openRecordForm, openVisadoresManager, printChartsReport, printCompanyReport, removeAccion, removeAttachment, removeCatalogItem, removeDotacionMes, removeInvestigador, removeLeccion, removeVessel, removeVisador, renderAll, renderAuditNcKpi, renderOcimfKpi, renderScoreCard, setScoreCardYear, setScoreCardTarget, renderTable, saveRecord, setCompanyLogo, setSiteFilter, setTypeFilter, toggleCategoriaOtro, toggleTipificacionCausaOtro, toggleVisado, updateAccionField, updateInvestigadorField, updateVesselOptions, validateEstadoCierre, refreshData, logoutHsqe });
+Object.assign(window, { addAccion, addAttachmentFile, addAttachmentManual, addCatalogItem, addDotacionMes, addInvestigador, addLeccion, addVessel, addVisador, clearFilters, closeModal, deleteRecord, exportData, printRecordPDF, openAttachment, openCatalogManager, openRecordForm, openVisadoresManager, printChartsReport, printCompanyReport, removeAccion, removeAttachment, removeCatalogItem, removeDotacionMes, removeInvestigador, removeLeccion, removeVessel, removeVisador, renderAll, renderAuditNcKpi, renderOcimfKpi, renderScoreCard, setScoreCardYear, setScoreCardTarget, renderTable, saveRecord, setCompanyLogo, setSiteFilter, setClienteFilter, setTypeFilter, toggleCategoriaOtro, toggleTipificacionCausaOtro, toggleVisado, updateAccionField, updateInvestigadorField, updateVesselOptions, validateEstadoCierre, refreshData, logoutHsqe });
 
 async function logoutHsqe(){
   await supabase.auth.signOut();
