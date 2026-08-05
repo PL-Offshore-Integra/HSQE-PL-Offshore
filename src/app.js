@@ -245,6 +245,10 @@ let CURRENT_USER = null; // email de la sesión activa (se setea en initApp)
 // Visador por defecto (se puede administrar desde "Gestionar usuarios / visadores").
 // Nota: los dominios de correo no admiten acentos ni ñ; se usa 'paranalogistica' (sin acento).
 const VISADOR_DEFAULT = { email: 'emartinez@paranalogistica.com.ar', nombre: 'Emmanuel Martinez', cargo: 'Gte. HSQE/DPA' };
+const VISADORES_DEFAULT = [
+  { email: 'emartinez@paranalogistica.com.ar', nombre: 'Emmanuel Martinez', cargo: 'Gte. HSQE/DPA' },
+  { email: 'mpadilla@paranalogistica.com.ar', nombre: 'M. Padilla', cargo: 'HSQE/DPA' },
+];
 
 // Normaliza email para comparar: minúsculas + sin acentos (tolera 'logística' vs 'logistica').
 function normEmail(e){
@@ -280,7 +284,7 @@ async function loadData(){
     DATA.companies = (cfgRes.data && cfgRes.data.data && Array.isArray(cfgRes.data.data.companies)) ? cfgRes.data.data.companies : [];
     DATA.scorecardTargets = (cfgRes.data && cfgRes.data.data && cfgRes.data.data.scorecardTargets) ? cfgRes.data.data.scorecardTargets : {};
     DATA.visadores = (cfgRes.data && cfgRes.data.data && Array.isArray(cfgRes.data.data.visadores)) ? cfgRes.data.data.visadores : [];
-    if(DATA.visadores.length === 0){ DATA.visadores = [ {...VISADOR_DEFAULT} ]; await saveConfig(); }
+    if(DATA.visadores.length === 0){ DATA.visadores = VISADORES_DEFAULT.map(v=>({...v})); await saveConfig(); }
     if(DATA.companies.length === 0){ seedDefaults(); await saveConfig(); }
   }catch(e){
     console.error('Error cargando datos HSQE:', e && e.message ? e.message : e);
@@ -1560,7 +1564,7 @@ function openRecordForm(id){
         ${r ? `<div style="width:100%;">${visadoBlockHtml(r)}</div>` : ''}
         <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;">
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            ${r? `<button class="btn danger" onclick="deleteRecord('${r.id}')">Eliminar</button>` : ''}
+            ${r && usuarioActualPuedeVisar() ? `<button class="btn danger" onclick="deleteRecord('${r.id}')">Eliminar</button>` : ''}
             ${r? `<button class="btn" onclick="printRecordPDF('${r.id}')">🖨 Imprimir PDF</button>` : ''}
           </div>
           <div style="display:flex;gap:8px;">
@@ -2165,6 +2169,10 @@ function manageLeccionesAprendidas(rec){
   return nuevas;
 }
 async function deleteRecord(id){
+  if(!usuarioActualPuedeVisar()){
+    showToast('Solo el Responsable HSQE/DPA autorizado puede eliminar registros');
+    return;
+  }
   if(!confirm('¿Eliminar este registro? Esta acción no se puede deshacer.')) return;
   const ok = await deleteRegistroRow(id);
   if(!ok) return;
