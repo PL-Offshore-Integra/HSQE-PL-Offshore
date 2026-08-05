@@ -25,6 +25,10 @@
       <label style="font-size:10px;color:rgba(255,255,255,0.45);text-transform:uppercase;letter-spacing:0.08em;display:block;margin-bottom:5px;padding-left:2px;">Sitio / Buque</label>
       <select id="siteFilter" onchange="setSiteFilter(this.value)"></select>
     </div>
+    <div class="company-select" style="padding-top:8px;">
+      <label style="font-size:10px;color:rgba(255,255,255,0.45);text-transform:uppercase;letter-spacing:0.08em;display:block;margin-bottom:5px;padding-left:2px;">Cliente / Operación</label>
+      <select id="clienteFilter" onchange="setClienteFilter(this.value)"></select>
+    </div>
     <div class="nav-section" id="typeNav"></div>
     <div class="nav-section" style="margin-top:auto;">
       <div class="nav-label">Configuración</div>
@@ -107,10 +111,6 @@
       <select id="statusFilter" onchange="renderTable()">
         <option value="">Todos los estados</option>
         <option>Abierto</option><option>En Proceso</option><option>Cerrado</option>
-      </select>
-      <select id="sevFilter" onchange="renderTable()">
-        <option value="">Toda severidad</option>
-        <option>Baja</option><option>Media</option><option>Alta</option><option>Crítica</option>
       </select>
       <select id="overdueFilter" onchange="renderTable()">
         <option value="">Todos los vencimientos</option>
