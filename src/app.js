@@ -1177,9 +1177,12 @@ function renderAll(){
   renderClienteSelect();
   renderTypeNav();
 
-  // Solo un Responsable HSQE/DPA habilitado (visador) ve "Gestionar catálogos"
+  // Solo un Responsable HSQE/DPA habilitado (visador) ve la sección Configuración completa
+  const puedeConfig = usuarioActualPuedeVisar();
+  const navCfg = document.getElementById('navConfigSection');
+  if(navCfg) navCfg.style.display = puedeConfig ? '' : 'none';
   const navCat = document.getElementById('navCatalogos');
-  if(navCat) navCat.style.display = usuarioActualPuedeVisar() ? '' : 'none';
+  if(navCat) navCat.style.display = puedeConfig ? '' : 'none';
 
   const kpiMode = currentTypeFilter === 'KPI';
   setKpiViewMode(kpiMode);
