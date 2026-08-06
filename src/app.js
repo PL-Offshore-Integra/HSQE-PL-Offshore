@@ -541,7 +541,16 @@ function navItem(key, label, color, count){
     <span class="nav-count">${count}</span>
   </div>`;
 }
-function setTypeFilter(k){ currentTypeFilter = k; renderAll(); }
+function setTypeFilter(k){
+  currentTypeFilter = k;
+  // "Todos los registros" limpia los filtros para traer todo
+  if(k === 'ALL'){
+    const setVal = (id, v='') => { const el = document.getElementById(id); if(el) el.value = v; };
+    setVal('searchBox'); setVal('statusFilter'); setVal('sevFilter'); setVal('overdueFilter'); setVal('dateFrom'); setVal('dateTo');
+    currentClienteFilter = 'ALL';
+  }
+  renderAll();
+}
 function clearFilters(){
   const setVal = (id, v='') => { const el = document.getElementById(id); if(el) el.value = v; };
   setVal('searchBox');
