@@ -189,15 +189,30 @@ let CARGOS = ['','Capitán','Primer Oficial de Cubierta','Segundo Oficial de Cub
   'Jefe de Máquinas','Primer Oficial de Máquinas','Oficial de Máquinas','Contramaestre','Marinero','Engrasador',
   'Electricista','Cocinero','Camarero','Oficial de Seguridad / HSQE','Superintendente','DPA','Personal de tierra','Otros'];
 
-// Devuelve las opciones <option> del desplegable de cargos (desde el catálogo editable).
-function cargosDisponibles(){
-  return (DATA.catalogos && Array.isArray(DATA.catalogos.cargos)) ? DATA.catalogos.cargos.slice() : CARGOS.slice();
+// Cargos ahora son {cargo, email}. Tolera entradas viejas (strings).
+function normCargo(c){
+  if(typeof c === 'string') return { cargo: c.trim(), email: '' };
+  return { cargo: ((c&&c.cargo)||'').trim(), email: ((c&&c.email)||'').trim() };
 }
+function cargosList(){
+  const raw = (DATA.catalogos && Array.isArray(DATA.catalogos.cargos)) ? DATA.catalogos.cargos : CARGOS;
+  return raw.map(normCargo).filter(c => c.cargo);
+}
+function cargoEmail(cargo){
+  const n = (cargo||'').trim().toLowerCase();
+  if(!n) return '';
+  const f = cargosList().find(c => c.cargo.toLowerCase() === n);
+  return f ? f.email : '';
+}
+// Opciones del desplegable de cargos (para Cargo del reportado/investigador y para Responsable)
 function cargoOptionsHtml(selected){
-  const list = cargosDisponibles();
-  const sel = selected || '';
-  if(sel && !list.includes(sel)) list.push(sel); // conserva un cargo viejo aunque no esté en la lista
-  return list.map(c=>`<option value="${(c||'').replace(/"/g,'&quot;')}" ${sel===c?'selected':''}>${c||'— Seleccionar —'}</option>`).join('');
+  const sel = (selected||'').trim();
+  const names = cargosList().map(c => c.cargo);
+  if(sel && !names.some(n => n.toLowerCase() === sel.toLowerCase())) names.push(sel);
+  names.sort((a,b) => a.localeCompare(b,'es'));
+  let html = `<option value="">— Seleccionar —</option>`;
+  html += names.map(c => `<option value="${c.replace(/"/g,'&quot;')}" ${sel.toLowerCase()===c.toLowerCase()?'selected':''}>${c}</option>`).join('');
+  return html;
 }
 
 // Cliente / Operación (catálogo editable)
@@ -242,19 +257,6 @@ let currentClienteFilter = 'ALL';
 
 /* ============ USUARIO ACTUAL Y VISADO (Responsable HSQE/DPA) ============ */
 let CURRENT_USER = null; // email de la sesión activa (se setea en initApp)
-
-/* ============ NOTIFICACIONES POR CORREO (Edge Function 'notify' + Resend) ============ */
-const APP_URL = 'https://integra.terra-mare.com.ar';   // link que se incluye en los mails
-const MAIL_ADMIN = 'emartinez@ploffshore.com';         // recibe aviso de cada alta/actualización
-async function enviarNotificaciones(emails){
-  const lista = (emails||[]).filter(e => e && e.to);
-  if(!lista.length) return;
-  try{
-    await supabase.functions.invoke('notify', { body: { emails: lista } });
-  }catch(e){
-    console.warn('No se pudieron enviar notificaciones por correo:', e);
-  }
-}
 
 // Visador por defecto (se puede administrar desde "Gestionar usuarios / visadores").
 // Nota: los dominios de correo no admiten acentos ni ñ; se usa 'paranalogistica' (sin acento).
@@ -391,6 +393,8 @@ function ensureCatalogos(){
   if(!Array.isArray(c.tipificacionIncidente)) c.tipificacionIncidente = TIPIFICACION_INCIDENTE.slice();
   if(!Array.isArray(c.tipificacionCausaRaiz)) c.tipificacionCausaRaiz = TIPIFICACION_CAUSA_RAIZ.slice();
   if(!Array.isArray(c.cargos)) c.cargos = CARGOS.slice();
+  c.cargos = c.cargos.map(x => (typeof x === 'string' ? { cargo: x.trim(), email: '' } : { cargo: ((x&&x.cargo)||'').trim(), email: ((x&&x.email)||'').trim() })).filter(x => x.cargo);
+  c.cargos.sort((a,b) => a.cargo.localeCompare(b.cargo, 'es'));
   if(!Array.isArray(c.clientes)) c.clientes = CLIENTES.slice();
   if(!c.clientes.includes('No Asignado a Cliente')) c.clientes.push('No Asignado a Cliente');
   if(!c.dotacionMensual || typeof c.dotacionMensual !== 'object' || Array.isArray(c.dotacionMensual)) c.dotacionMensual = {};
@@ -399,7 +403,6 @@ function ensureCatalogos(){
   ordenarAlfa(c.categoriasCondicionInsegura);
   ordenarAlfa(c.tipificacionIncidente);
   ordenarAlfa(c.tipificacionCausaRaiz);
-  ordenarAlfa(c.cargos);
   ordenarAlfa(c.clientes);
   if(DATA.companies[0]) ordenarAlfa(DATA.companies[0].vessels);
   CLASIF_ORIGEN = c.clasifOrigen;
@@ -1273,14 +1276,10 @@ function openRecordForm(id){
           </div>
         </div>
 
-        <div class="section-title" style="border-top:none;padding-top:0;margin-top:14px;">Reportado por <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--graphite-light);">(nombre / cargo)</span></div>
-        <div class="field-row">
-          <div class="field"><label>Nombre</label>
-            <input type="text" id="f_reportado_nombre" value="${repNombre.replace(/"/g,'&quot;')}" placeholder="Ej: Daniel Pugliesi">
-          </div>
-          <div class="field"><label>Cargo</label>
-            <select id="f_reportado_cargo">${cargoOptions}</select>
-          </div>
+        <div class="section-title" style="border-top:none;padding-top:0;margin-top:14px;">Reportado por <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--graphite-light);">(informativo)</span></div>
+        <div class="field">
+          <label>Nombre y apellido</label>
+          <input type="text" id="f_reportado_nombre" value="${repNombre.replace(/"/g,'&quot;')}" placeholder="Ej: Daniel Pugliesi">
         </div>
 
         <div id="block_investigadores">
@@ -1502,28 +1501,10 @@ function openRecordForm(id){
         </div>
         <div id="block_responsable_simple" class="field-row">
           <div class="field"><label>Responsable</label>
-            <input type="text" id="f_responsable" value="${r?r.responsable||'':''}">
+            <select id="f_responsable">${cargoOptionsHtml(r?r.responsable||'':'')}</select>
           </div>
           <div class="field"><label>Fecha de vencimiento</label>
             <input type="date" id="f_vencimiento" value="${r?r.fecha_vencimiento||'':''}">
-          </div>
-        </div>
-
-        <div id="block_sug_notificacion">
-          <div class="section-title" style="margin-top:18px;padding-top:10px;border-top:1px dashed var(--line);">Notificación</div>
-          <div class="field"><label>A quién comunicar</label>
-            <input type="text" id="f_sug_comunicar" value="${r?(r.sug_comunicar_a||'').replace(/"/g,'&quot;'):''}" placeholder="Ej: Jefes de Departamento, Tripulación">
-          </div>
-          <div class="field-row-3">
-            <div class="field"><label>A través de qué medio</label>
-              <select id="f_sug_medio">${MEDIOS_COMUNICACION.map(m=>`<option value="${m}" ${r&&r.sug_medio===m?'selected':''}>${m||'Seleccionar...'}</option>`).join('')}</select>
-            </div>
-            <div class="field"><label>En qué plazo</label>
-              <input type="text" id="f_sug_plazo" value="${r?(r.sug_plazo||'').replace(/"/g,'&quot;'):''}" placeholder="Ej: Próxima reunión, 7 días">
-            </div>
-            <div class="field"><label>Responsable de comunicar</label>
-              <input type="text" id="f_sug_resp_notif" value="${r?(r.sug_resp_notif||'').replace(/"/g,'&quot;'):''}" placeholder="Nombre">
-            </div>
           </div>
         </div>
 
@@ -1539,7 +1520,7 @@ function openRecordForm(id){
           </div>
           <div class="field-row-3">
             <div class="field"><label>Responsable</label>
-              <select id="f_sug_resp" onchange="onPersonaSelect(this)">${personaOptionsHtml(r?(r.responsable||''):'')}</select>
+              <select id="f_sug_resp">${cargoOptionsHtml(r?(r.responsable||''):'')}</select>
             </div>
             <div class="field"><label>Plazo (fecha límite)</label>
               <input type="date" id="f_sug_plazo_seg" value="${r?r.fecha_vencimiento||'':''}">
@@ -1640,39 +1621,6 @@ function personaEmail(nombre){
   if(!n) return '';
   const found = personasList().find(p => p.nombre.toLowerCase() === n);
   return found ? found.email : '';
-}
-// Desplegable de personas (para Responsable de acciones y de seguimiento de sugerencias, donde se notifica por mail)
-function personaOptionsHtml(selected){
-  const sel = (selected||'').trim();
-  const nombres = personasList().map(p => p.nombre);
-  if(sel && !nombres.some(n => n.toLowerCase() === sel.toLowerCase())) nombres.push(sel);
-  nombres.sort((a,b) => a.localeCompare(b,'es'));
-  let html = `<option value="">— Seleccionar persona —</option>`;
-  html += nombres.map(n => `<option value="${n.replace(/"/g,'&quot;')}" ${sel.toLowerCase()===n.toLowerCase()?'selected':''}>${n}</option>`).join('');
-  html += `<option value="__NUEVA__">＋ Agregar persona nueva…</option>`;
-  return html;
-}
-// Alta rápida de persona desde un desplegable (queda para completar el correo en Catálogos)
-async function agregarPersonaRapida(){
-  const nombre = (prompt('Nombre y apellido de la nueva persona:') || '').trim();
-  if(!nombre) return '';
-  if(!DATA.catalogos) ensureCatalogos();
-  if(!Array.isArray(DATA.catalogos.personas)) DATA.catalogos.personas = [];
-  if(!personasList().some(p => p.nombre.toLowerCase() === nombre.toLowerCase())){
-    DATA.catalogos.personas.push({ nombre, email: '' });
-    DATA.catalogos.personas.sort((a,b) => a.nombre.localeCompare(b.nombre,'es'));
-    await saveData();
-    renderPersonasDatalist();
-    showToast('Persona agregada. Cargá su correo en Gestionar catálogos → Personas.');
-  }
-  return nombre;
-}
-// Manejador para desplegables de persona que se leen del DOM al guardar (ej. sugerencia)
-async function onPersonaSelect(sel){
-  if(sel.value !== '__NUEVA__') return;
-  const nombre = await agregarPersonaRapida();
-  sel.innerHTML = personaOptionsHtml(nombre);
-  sel.value = nombre;
 }
 function renderPersonasDatalist(){
   const dl = document.getElementById('personasDatalist');
@@ -1779,10 +1727,6 @@ function removeAccion(tipoAccion, i){
 function updateAccionField(tipoAccion, i, field, value){
   const arr = accionesArray(tipoAccion);
   if(!arr[i]) return;
-  if(field === 'responsable' && value === '__NUEVA__'){
-    agregarPersonaRapida().then(nombre => { arr[i].responsable = nombre; renderAccionesBlock(tipoAccion); });
-    return;
-  }
   arr[i][field] = value;
   if(field === 'estado'){
     if(value === 'Cerrado' && !arr[i].fecha_cierre) arr[i].fecha_cierre = todayISO();
@@ -1819,7 +1763,7 @@ function renderAccionesBlock(tipoAccion){
       </div>
       <div class="field-row-3">
         <div class="field"><label>Responsable</label>
-          <select onchange="updateAccionField('${tipoAccion}',${i},'responsable',this.value)">${personaOptionsHtml(a.responsable)}</select>
+          <select onchange="updateAccionField('${tipoAccion}',${i},'responsable',this.value)">${cargoOptionsHtml(a.responsable)}</select>
         </div>
         <div class="field"><label>Fecha de vencimiento</label>
           <input type="date" value="${a.vencimiento||''}" oninput="updateAccionField('${tipoAccion}',${i},'vencimiento',this.value)">
@@ -1849,7 +1793,6 @@ function toggleConditionalFields(){
   document.getElementById('block_causa_accion').style.display = TIPOS_SIN_CAUSA_ACCION.includes(tipo) ? 'none' : 'block';
   document.getElementById('block_responsable_simple').style.display = (TIPOS_SIN_CAUSA_ACCION.includes(tipo) && !esSug) ? 'grid' : 'none';
   document.getElementById('block_comunicacion').style.display = (TIPOS_SIN_CAUSA_ACCION.includes(tipo) && !esSug) ? 'block' : 'none';
-  document.getElementById('block_sug_notificacion').style.display = esSug ? 'block' : 'none';
   document.getElementById('block_sug_seguimiento').style.display = esSug ? 'block' : 'none';
   document.getElementById('block_gestion').style.display = esSug ? 'none' : 'block';
   document.getElementById('block_cuasi').style.display = (tipo === 'CUA') ? 'block' : 'none';
@@ -2114,13 +2057,12 @@ async function saveRecord(){
     return;
   }
 
-  // Aviso (no bloquea) si algún responsable asignado todavía no tiene correo cargado.
+  // Aviso (no bloquea) si algún cargo responsable asignado todavía no tiene correo cargado.
   const respAsignados = [
     ...(tipoSinAcciones ? [] : [...modalAccionesCorrectivas, ...modalAccionesPreventivas].map(a => (a.responsable||'').trim())),
     esSug ? getIf('f_sug_resp').trim() : '',
-    esSug ? getIf('f_sug_resp_notif').trim() : '',
   ].filter(Boolean);
-  const sinMail = [...new Set(respAsignados)].filter(n => !personaEmail(n));
+  const sinMail = [...new Set(respAsignados)].filter(c => !cargoEmail(c));
 
   const rec = {
     id: editingId || generateRecordId(tipoSel, fechaSel),
@@ -2134,8 +2076,8 @@ async function saveRecord(){
     descripcion: descripcionPrincipal,
     inc_descripcion: esInc ? incDescripcion : null,
     reportado_nombre: get('f_reportado_nombre').trim(),
-    reportado_cargo: getIf('f_reportado_cargo'),
-    reportado_por: (get('f_reportado_nombre').trim() + (getIf('f_reportado_cargo') ? ' / ' + getIf('f_reportado_cargo') : '')),
+    reportado_cargo: '',
+    reportado_por: get('f_reportado_nombre').trim(),
     investigador_lider_nombre: esInc ? getIf('f_investigador_lider_nombre').trim() : '',
     investigador_lider_cargo: esInc ? getIf('f_investigador_lider_cargo') : '',
     investigador_lider: esInc ? (getIf('f_investigador_lider_nombre').trim() + (getIf('f_investigador_lider_cargo') ? ' / ' + getIf('f_investigador_lider_cargo') : '')) : '',
@@ -2179,14 +2121,9 @@ async function saveRecord(){
     fecha_vencimiento: esSug ? getIf('f_sug_plazo_seg') : (tipoSinAcciones ? get('f_vencimiento') : ''),
     fecha_cierre: esSug ? getIf('f_sug_cierre') : get('f_cierre'),
     referencia_normativa: get('f_referencia'),
-    sug_comunicar_a: esSug ? getIf('f_sug_comunicar') : '',
-    sug_medio: esSug ? getIf('f_sug_medio') : '',
-    sug_plazo: esSug ? getIf('f_sug_plazo') : '',
-    sug_resp_notif: esSug ? getIf('f_sug_resp_notif') : '',
     sug_area: esSug ? getIf('f_sug_area') : '',
     sug_realiza: esSug ? getIf('f_sug_realiza') : '',
     sug_observacion: esSug ? getIf('f_sug_observacion') : '',
-    sug_notif_resp: '',
     adjuntos: JSON.parse(JSON.stringify(modalAttachments)),
   };
   if(!rec.fecha || !rec.titulo || !rec.descripcion){
@@ -2205,7 +2142,6 @@ async function saveRecord(){
       rec.visado_email = prev.visado_email;
       rec.visado_fecha = prev.visado_fecha;
     }
-    if(prev) rec.sug_notif_resp = prev.sug_notif_resp || '';
   }
 
   if(editingId){
@@ -2214,10 +2150,6 @@ async function saveRecord(){
   } else {
     DATA.records.push(rec);
   }
-  // Solo los responsables reales alimentan el catálogo de personas (el "reportado por" y el
-  // "responsable de comunicar" son informativos/tipeados y no deben poblar el desplegable).
-  if(esSug) registrarPersonaSiEsNueva(rec.responsable);
-  [...rec.acciones_correctivas, ...rec.acciones_preventivas].forEach(a => registrarPersonaSiEsNueva(a.responsable));
   const nuevasLA = manageLeccionesAprendidas(rec);
   const cambiados = [rec];
   (rec.lecciones_aprendidas || []).forEach(item => {
@@ -2226,66 +2158,14 @@ async function saveRecord(){
       if(la) cambiados.push(la);
     }
   });
-
-  // ===== Notificaciones por correo =====
-  const notifs = [];
-  const linkHtml = `<p style="margin-top:14px;"><a href="${APP_URL}" style="color:#0A3A66;">Ingresar a HSQE Integra</a></p>`;
-  // 1) Responsables de acciones recién asignados (o que cambiaron)
-  if(!tipoSinAcciones){
-    const procAccion = (a, tipoAcc) => {
-      const nombre = (a.responsable||'').trim();
-      if(!nombre) return;
-      const email = personaEmail(nombre);
-      if(!email) return;
-      if((a.notif_resp||'') === email) return; // ya se le avisó a esa persona
-      a.notif_resp = email;
-      notifs.push({
-        to: email,
-        subject: `HSQE Integra — Acción asignada · Reporte ${rec.id}`,
-        html: `<p>${nombre} — Se le ha asignado como responsable para una acción ${tipoAcc} en el reporte N° <b>${rec.id}</b>${rec.titulo?` (${rec.titulo})`:''}.</p><p>Por favor, ingresar a HSQE Integra para indicar sus novedades.</p>${linkHtml}`,
-      });
-    };
-    (rec.acciones_correctivas||[]).forEach(a => procAccion(a, 'correctiva'));
-    (rec.acciones_preventivas||[]).forEach(a => procAccion(a, 'preventiva'));
-  }
-  // 1b) Responsable de la sugerencia
-  if(esSug){
-    const nombre = (rec.responsable||'').trim();
-    const email = personaEmail(nombre);
-    if(email && (rec.sug_notif_resp||'') !== email){
-      rec.sug_notif_resp = email;
-      notifs.push({
-        to: email,
-        subject: `HSQE Integra — Sugerencia asignada · Reporte ${rec.id}`,
-        html: `<p>${nombre} — Se le ha asignado como responsable para una sugerencia de mejora en el reporte N° <b>${rec.id}</b>${rec.titulo?` (${rec.titulo})`:''}.</p><p>Por favor, ingresar a HSQE Integra para indicar sus novedades.</p>${linkHtml}`,
-      });
-    }
-  }
-  // 2) Aviso al administrador por alta / actualización
-  notifs.push({
-    to: MAIL_ADMIN,
-    subject: `HSQE Integra — Reporte ${editingId?'actualizado':'nuevo'}: ${rec.id}`,
-    html: `<p>Se ${editingId?'actualizó':'cargó'} un reporte en HSQE Integra:</p>
-      <ul>
-        <li><b>N°:</b> ${rec.id}</li>
-        <li><b>Tipo:</b> ${(TYPES[rec.tipo]||{}).label||rec.tipo}</li>
-        <li><b>Título:</b> ${rec.titulo||'—'}</li>
-        <li><b>Instalación:</b> ${rec.instalacion||'—'}</li>
-        <li><b>Cliente / Operación:</b> ${rec.cliente_operacion||'—'}</li>
-        <li><b>Estado:</b> ${rec.estado||'—'}</li>
-        <li><b>Reportado por:</b> ${rec.reportado_por||'—'}</li>
-      </ul>${linkHtml}`,
-  });
-
   const resultados = await Promise.all(cambiados.map(r => upsertRegistro(r)));
   await saveCatalogos(); // personas nuevas registradas
   if(resultados.some(ok => !ok)){ return; } // error ya notificado; el modal queda abierto
-  enviarNotificaciones(notifs); // envío en segundo plano
   closeModal();
   renderAll();
   showToast(nuevasLA>0 ? `Registro guardado — se ${nuevasLA===1?'generó 1 Lección Aprendida':'generaron '+nuevasLA+' Lecciones Aprendidas'} para seguimiento` : (editingId? 'Registro actualizado' : 'Registro creado'));
   if(sinMail.length){
-    setTimeout(() => showToast('Ojo: sin correo cargado (no recibirán aviso): ' + sinMail.join(', ') + '. Cargalo en Catálogos → Personas.'), 2600);
+    setTimeout(() => showToast('Ojo: sin correo cargado (no recibirán aviso): ' + sinMail.join(', ') + '. Cargalo en Gestionar catálogos → Cargos.'), 2600);
   }
 }
 function manageLeccionesAprendidas(rec){
@@ -2549,10 +2429,7 @@ function renderCatalogManager(){
      <div style="margin-bottom:14px;"><button class="btn secondary" onclick="openVisadoresManager()">👤 Gestionar visadores</button></div>` +
     sitiosSectionHtml() +
     dotacionSectionHtml() +
-    personasSectionHtml() +
-    catalogSectionHtml('Cargos (Reportado por)',
-      'Opciones del desplegable "Cargo" en el campo "Reportado por".',
-      'cargos', cat.cargos.filter(c=>c)) +
+    cargosSectionHtml() +
     catalogSectionHtml('Cliente / Operación',
       'Opciones del desplegable "Cliente / Operación" de cada registro. También sirve como filtro en todas las secciones.',
       'clientes', (cat.clientes||[]).filter(c=>c)) +
@@ -2567,56 +2444,56 @@ function renderCatalogManager(){
       'clasifOrigen', cat.clasifOrigen.filter(c=>c));
 }
 /* ============ CATÁLOGO DE PERSONAS (nombre + email) ============ */
-function personasSectionHtml(){
-  const list = personasList();
-  const rows = list.length ? list.map((p,i)=>`
-    <div class="field-row-3" style="align-items:flex-end;margin-bottom:6px;">
-      <div class="field" style="margin-bottom:0;"><input type="text" value="${p.nombre.replace(/"/g,'&quot;')}" placeholder="Nombre y apellido" onchange="updatePersonaField(${i},'nombre',this.value)"></div>
-      <div class="field" style="margin-bottom:0;"><input type="email" value="${(p.email||'').replace(/"/g,'&quot;')}" placeholder="correo@ploffshore.com" onchange="updatePersonaField(${i},'email',this.value)"></div>
-      <button class="btn secondary" style="padding:6px 10px;color:var(--red);justify-self:start;" onclick="removePersona(${i})">✕ Quitar</button>
-    </div>`).join('') : '<div style="font-size:12px;color:var(--graphite-light);margin-bottom:6px;">Sin personas cargadas.</div>';
-  return `<div class="section-title" style="margin-top:16px;">Personas (Responsable / Reportado por)</div>
-    <div style="font-size:11px;color:var(--graphite-light);margin:-4px 0 8px;">Nombre y apellido de cada persona y su correo. El correo se usa para notificar cuando se le asigna una acción o una sugerencia. Las personas se agregan solas al cargar un nombre nuevo en un registro; acá completás el mail.</div>
+function cargosSectionHtml(){
+  const list = cargosList();
+  const rows = list.length ? list.map((c,i)=>`
+    <div style="display:grid;grid-template-columns:1.2fr 1.4fr auto;gap:8px;align-items:end;margin-bottom:6px;">
+      <div class="field" style="margin-bottom:0;"><input type="text" value="${c.cargo.replace(/"/g,'&quot;')}" placeholder="Cargo" onchange="updateCargoField(${i},'cargo',this.value)"></div>
+      <div class="field" style="margin-bottom:0;"><input type="email" value="${(c.email||'').replace(/"/g,'&quot;')}" placeholder="correo@ploffshore.com" onchange="updateCargoField(${i},'email',this.value)"></div>
+      <button class="btn secondary" style="padding:6px 10px;color:var(--red);" onclick="removeCargo(${i})">✕</button>
+    </div>`).join('') : '<div style="font-size:12px;color:var(--graphite-light);margin-bottom:6px;">Sin cargos cargados.</div>';
+  return `<div class="section-title" style="margin-top:16px;">Cargos (Responsables · con correo)</div>
+    <div style="font-size:11px;color:var(--graphite-light);margin:-4px 0 8px;">Cada cargo con su correo. Estos cargos son los que se eligen como Responsable en acciones y sugerencias; el correo se usa para notificar. También son las opciones del "Cargo" en investigadores.</div>
+    <div style="display:grid;grid-template-columns:1.2fr 1.4fr auto;gap:8px;margin-bottom:4px;font-size:10px;color:var(--graphite-light);text-transform:uppercase;letter-spacing:0.04em;">
+      <div>Cargo</div><div>Correo</div><div></div>
+    </div>
     ${rows}
-    <div class="field-row-3" style="align-items:flex-end;">
-      <div class="field" style="margin-bottom:0;"><input type="text" id="newPersonaNombre" placeholder="Nombre y apellido"></div>
-      <div class="field" style="margin-bottom:0;"><input type="email" id="newPersonaEmail" placeholder="correo@ploffshore.com"></div>
-      <button class="btn" style="padding:6px 12px;justify-self:start;" onclick="addPersona()">+ Agregar</button>
+    <div style="display:grid;grid-template-columns:1.2fr 1.4fr auto;gap:8px;align-items:end;margin-top:4px;">
+      <div class="field" style="margin-bottom:0;"><input type="text" id="newCargoNombre" placeholder="Cargo"></div>
+      <div class="field" style="margin-bottom:0;"><input type="email" id="newCargoEmail" placeholder="correo@ploffshore.com"></div>
+      <button class="btn" style="padding:6px 12px;" onclick="addCargo()">+ Agregar</button>
     </div>`;
 }
-async function updatePersonaField(i, field, val){
-  const arr = personasList();
+async function updateCargoField(i, field, val){
+  const arr = cargosList();
   if(!arr[i]) return;
   arr[i][field] = (val||'').trim();
-  DATA.catalogos.personas = arr;
+  DATA.catalogos.cargos = arr;
   await saveData();
-  renderPersonasDatalist();
   showToast('Guardado');
 }
-async function addPersona(){
-  const nombre = (document.getElementById('newPersonaNombre').value||'').trim();
-  const email = (document.getElementById('newPersonaEmail').value||'').trim();
-  if(!nombre){ showToast('Ingresá el nombre y apellido'); return; }
-  if(personasList().some(p=>p.nombre.toLowerCase()===nombre.toLowerCase())){ showToast('Esa persona ya existe'); return; }
-  const arr = personasList();
-  arr.push({ nombre, email });
-  arr.sort((a,b)=>a.nombre.localeCompare(b.nombre,'es'));
-  DATA.catalogos.personas = arr;
+async function addCargo(){
+  const cargo = (document.getElementById('newCargoNombre').value||'').trim();
+  const email = (document.getElementById('newCargoEmail').value||'').trim();
+  if(!cargo){ showToast('Ingresá el cargo'); return; }
+  if(cargosList().some(c=>c.cargo.toLowerCase()===cargo.toLowerCase())){ showToast('Ese cargo ya existe'); return; }
+  const arr = cargosList();
+  arr.push({ cargo, email });
+  arr.sort((a,b)=>a.cargo.localeCompare(b.cargo,'es'));
+  DATA.catalogos.cargos = arr;
   await saveData();
   renderCatalogManager();
-  renderPersonasDatalist();
-  showToast('Persona agregada');
+  showToast('Cargo agregado');
 }
-async function removePersona(i){
-  const arr = personasList();
+async function removeCargo(i){
+  const arr = cargosList();
   if(!arr[i]) return;
-  if(!confirm(`¿Quitar a ${arr[i].nombre} del catálogo de personas?`)) return;
+  if(!confirm(`¿Quitar el cargo "${arr[i].cargo}"?`)) return;
   arr.splice(i,1);
-  DATA.catalogos.personas = arr;
+  DATA.catalogos.cargos = arr;
   await saveData();
   renderCatalogManager();
-  renderPersonasDatalist();
-  showToast('Persona quitada');
+  showToast('Cargo quitado');
 }
 
 async function addCatalogItem(listKey){
@@ -2982,11 +2859,6 @@ async function composeRecordBody(id){
     : `<p style="font-size:10.5pt;line-height:1.5;">${r.descripcion||'—'}</p>`;
 
   if(r.tipo==='SUG'){
-    if(r.sug_comunicar_a || r.sug_medio || r.sug_plazo || r.sug_resp_notif){
-      body += secH3('Notificación');
-      body += `<p style="font-size:10.5pt;margin:0 0 4px;"><b>A quién comunicar:</b> ${r.sug_comunicar_a||'—'}</p>`;
-      body += `<p style="font-size:10.5pt;margin:0 0 4px;"><b>Medio:</b> ${r.sug_medio||'—'} &nbsp;·&nbsp; <b>Plazo:</b> ${r.sug_plazo||'—'} &nbsp;·&nbsp; <b>Responsable:</b> ${r.sug_resp_notif||'—'}</p>`;
-    }
     if(r.sug_observacion){
       body += secH3('Observación del seguimiento');
       body += `<p style="font-size:10.5pt;line-height:1.5;">${r.sug_observacion}</p>`;
@@ -3235,7 +3107,7 @@ async function printRecordPDF(id){
 }
 
 /* ============ INIT ============ */
-Object.assign(window, { addAccion, addAttachmentFile, addAttachmentManual, addCatalogItem, addDotacionMes, addInvestigador, addLeccion, addPersona, addVessel, addVisador, clearFilters, closeModal, deleteRecord, exportData, printRecordPDF, openAttachment, openCatalogManager, openRecordForm, openVisadoresManager, printChartsReport, printCompanyReport, removeAccion, removeAttachment, removeCatalogItem, removeDotacionMes, removeInvestigador, removeLeccion, removePersona, removeVessel, removeVisador, renderAll, renderAuditNcKpi, renderOcimfKpi, renderScoreCard, setScoreCardYear, setScoreCardTarget, renderTable, saveRecord, setCompanyLogo, setSiteFilter, setClienteFilter, setTypeFilter, toggleCategoriaOtro, toggleTipificacionCausaOtro, toggleVisado, updateAccionField, updateInvestigadorField, updatePersonaField, onPersonaSelect, agregarPersonaRapida, updateVesselOptions, validateEstadoCierre, refreshData, logoutHsqe });
+Object.assign(window, { addAccion, addAttachmentFile, addAttachmentManual, addCatalogItem, addDotacionMes, addInvestigador, addLeccion, addVessel, addVisador, clearFilters, closeModal, deleteRecord, exportData, printRecordPDF, openAttachment, openCatalogManager, openRecordForm, openVisadoresManager, printChartsReport, printCompanyReport, removeAccion, removeAttachment, removeCatalogItem, removeDotacionMes, removeInvestigador, removeLeccion, removeVessel, removeVisador, renderAll, renderAuditNcKpi, renderOcimfKpi, renderScoreCard, setScoreCardYear, setScoreCardTarget, renderTable, saveRecord, setCompanyLogo, setSiteFilter, setClienteFilter, setTypeFilter, toggleCategoriaOtro, toggleTipificacionCausaOtro, toggleVisado, updateAccionField, updateInvestigadorField, updateVesselOptions, updateCargoField, addCargo, removeCargo, validateEstadoCierre, refreshData, logoutHsqe });
 
 async function logoutHsqe(){
   await supabase.auth.signOut();
