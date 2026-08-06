@@ -43,6 +43,7 @@ const EN = {
   'Investigadores':'Investigators',
   'Datos del incidente (condiciones al momento del evento)':'Incident data (conditions at the time of the event)',
   'Notificación':'Notification','Clasificación OCIMF/TMSA':'OCIMF/TMSA Classification',
+  'Observación del seguimiento':'Follow-up remarks',
   'Detalle del Cuasi Accidente':'Near Miss Details','Datos de la Lesión':'Injury Data',
   'Consideraciones del Evento':'Event Considerations','Clasificación':'Classification',
   'Análisis y Acción':'Analysis and Action','Comunicación':'Communication',
@@ -541,12 +542,14 @@ function navItem(key, label, color, count){
 }
 function setTypeFilter(k){ currentTypeFilter = k; renderAll(); }
 function clearFilters(){
-  document.getElementById('searchBox').value='';
-  document.getElementById('statusFilter').value='';
-  const sf = document.getElementById('sevFilter'); if(sf) sf.value='';
-  document.getElementById('overdueFilter').value='';
-  const df = document.getElementById('dateFrom'); if(df) df.value='';
-  const dt = document.getElementById('dateTo'); if(dt) dt.value='';
+  const setVal = (id, v='') => { const el = document.getElementById(id); if(el) el.value = v; };
+  setVal('searchBox');
+  setVal('statusFilter');
+  setVal('sevFilter');
+  setVal('overdueFilter');
+  setVal('dateFrom');
+  setVal('dateTo');
+  currentClienteFilter = 'ALL';   // el filtro de cliente es variable de estado; hay que resetearlo aquí
   renderAll();
 }
 
@@ -1519,6 +1522,9 @@ function openRecordForm(id){
               <select id="f_sug_estado">${Object.keys(STATUS).map(s=>`<option ${r&&r.estado===s?'selected':''}>${s}</option>`).join('')}</select>
             </div>
           </div>
+          <div class="field"><label>Observación (motivo por el que se realiza o no)</label>
+            <textarea id="f_sug_observacion" placeholder="Ej: Se aprueba y se ejecutará en la próxima parada / No se realiza por...">${r?(r.sug_observacion||''):''}</textarea>
+          </div>
           <div class="field"><label>Fecha de cierre</label>
             <input type="date" id="f_sug_cierre" value="${r?r.fecha_cierre||'':''}">
           </div>
@@ -2083,6 +2089,7 @@ async function saveRecord(){
     sug_resp_notif: esSug ? getIf('f_sug_resp_notif') : '',
     sug_area: esSug ? getIf('f_sug_area') : '',
     sug_realiza: esSug ? getIf('f_sug_realiza') : '',
+    sug_observacion: esSug ? getIf('f_sug_observacion') : '',
     adjuntos: JSON.parse(JSON.stringify(modalAttachments)),
   };
   if(!rec.fecha || !rec.titulo || !rec.descripcion){
@@ -2771,6 +2778,10 @@ async function composeRecordBody(id){
       body += secH3('Notificación');
       body += `<p style="font-size:10.5pt;margin:0 0 4px;"><b>A quién comunicar:</b> ${r.sug_comunicar_a||'—'}</p>`;
       body += `<p style="font-size:10.5pt;margin:0 0 4px;"><b>Medio:</b> ${r.sug_medio||'—'} &nbsp;·&nbsp; <b>Plazo:</b> ${r.sug_plazo||'—'} &nbsp;·&nbsp; <b>Responsable:</b> ${r.sug_resp_notif||'—'}</p>`;
+    }
+    if(r.sug_observacion){
+      body += secH3('Observación del seguimiento');
+      body += `<p style="font-size:10.5pt;line-height:1.5;">${r.sug_observacion}</p>`;
     }
   }
 
