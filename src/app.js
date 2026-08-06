@@ -243,6 +243,19 @@ let currentClienteFilter = 'ALL';
 /* ============ USUARIO ACTUAL Y VISADO (Responsable HSQE/DPA) ============ */
 let CURRENT_USER = null; // email de la sesión activa (se setea en initApp)
 
+/* ============ NOTIFICACIONES POR CORREO (Edge Function 'notify' + Resend) ============ */
+const APP_URL = 'https://integra.terra-mare.com.ar';   // link que se incluye en los mails
+const MAIL_ADMIN = 'emartinez@ploffshore.com';         // recibe aviso de cada alta/actualización
+async function enviarNotificaciones(emails){
+  const lista = (emails||[]).filter(e => e && e.to);
+  if(!lista.length) return;
+  try{
+    await supabase.functions.invoke('notify', { body: { emails: lista } });
+  }catch(e){
+    console.warn('No se pudieron enviar notificaciones por correo:', e);
+  }
+}
+
 // Visador por defecto (se puede administrar desde "Gestionar usuarios / visadores").
 // Nota: los dominios de correo no admiten acentos ni ñ; se usa 'paranalogistica' (sin acento).
 const VISADOR_DEFAULT = { email: 'emartinez@paranalogistica.com.ar', nombre: 'Emmanuel Martinez', cargo: 'Gte. HSQE/DPA' };
@@ -1263,7 +1276,7 @@ function openRecordForm(id){
         <div class="section-title" style="border-top:none;padding-top:0;margin-top:14px;">Reportado por <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--graphite-light);">(nombre / cargo)</span></div>
         <div class="field-row">
           <div class="field"><label>Nombre</label>
-            <input type="text" id="f_reportado_nombre" list="personasDatalist" value="${repNombre.replace(/"/g,'&quot;')}" placeholder="Ej: Daniel Pugliesi">
+            <input type="text" id="f_reportado_nombre" value="${repNombre.replace(/"/g,'&quot;')}" placeholder="Ej: Daniel Pugliesi">
           </div>
           <div class="field"><label>Cargo</label>
             <select id="f_reportado_cargo">${cargoOptions}</select>
@@ -1274,7 +1287,7 @@ function openRecordForm(id){
           <div class="section-title" style="margin-top:14px;">Investigadores</div>
           <div class="field-row">
             <div class="field"><label>Investigador líder — Nombre</label>
-              <input type="text" id="f_investigador_lider_nombre" list="personasDatalist" value="${liderNombre.replace(/"/g,'&quot;')}" placeholder="Ej: María Gómez">
+              <input type="text" id="f_investigador_lider_nombre" value="${liderNombre.replace(/"/g,'&quot;')}" placeholder="Ej: María Gómez">
             </div>
             <div class="field"><label>Cargo</label>
               <select id="f_investigador_lider_cargo">${cargoOptionsHtml(liderCargo)}</select>
@@ -1489,7 +1502,7 @@ function openRecordForm(id){
         </div>
         <div id="block_responsable_simple" class="field-row">
           <div class="field"><label>Responsable</label>
-            <input type="text" id="f_responsable" list="personasDatalist" value="${r?r.responsable||'':''}">
+            <input type="text" id="f_responsable" value="${r?r.responsable||'':''}">
           </div>
           <div class="field"><label>Fecha de vencimiento</label>
             <input type="date" id="f_vencimiento" value="${r?r.fecha_vencimiento||'':''}">
@@ -1509,7 +1522,7 @@ function openRecordForm(id){
               <input type="text" id="f_sug_plazo" value="${r?(r.sug_plazo||'').replace(/"/g,'&quot;'):''}" placeholder="Ej: Próxima reunión, 7 días">
             </div>
             <div class="field"><label>Responsable de comunicar</label>
-              <input type="text" id="f_sug_resp_notif" list="personasDatalist" value="${r?(r.sug_resp_notif||'').replace(/"/g,'&quot;'):''}" placeholder="Nombre">
+              <input type="text" id="f_sug_resp_notif" value="${r?(r.sug_resp_notif||'').replace(/"/g,'&quot;'):''}" placeholder="Nombre">
             </div>
           </div>
         </div>
@@ -1526,7 +1539,7 @@ function openRecordForm(id){
           </div>
           <div class="field-row-3">
             <div class="field"><label>Responsable</label>
-              <input type="text" id="f_sug_resp" list="personasDatalist" value="${r?(r.responsable||'').replace(/"/g,'&quot;'):''}" placeholder="Nombre">
+              <select id="f_sug_resp" onchange="onPersonaSelect(this)">${personaOptionsHtml(r?(r.responsable||''):'')}</select>
             </div>
             <div class="field"><label>Plazo (fecha límite)</label>
               <input type="date" id="f_sug_plazo_seg" value="${r?r.fecha_vencimiento||'':''}">
@@ -1628,6 +1641,39 @@ function personaEmail(nombre){
   const found = personasList().find(p => p.nombre.toLowerCase() === n);
   return found ? found.email : '';
 }
+// Desplegable de personas (para Responsable de acciones y de seguimiento de sugerencias, donde se notifica por mail)
+function personaOptionsHtml(selected){
+  const sel = (selected||'').trim();
+  const nombres = personasList().map(p => p.nombre);
+  if(sel && !nombres.some(n => n.toLowerCase() === sel.toLowerCase())) nombres.push(sel);
+  nombres.sort((a,b) => a.localeCompare(b,'es'));
+  let html = `<option value="">— Seleccionar persona —</option>`;
+  html += nombres.map(n => `<option value="${n.replace(/"/g,'&quot;')}" ${sel.toLowerCase()===n.toLowerCase()?'selected':''}>${n}</option>`).join('');
+  html += `<option value="__NUEVA__">＋ Agregar persona nueva…</option>`;
+  return html;
+}
+// Alta rápida de persona desde un desplegable (queda para completar el correo en Catálogos)
+async function agregarPersonaRapida(){
+  const nombre = (prompt('Nombre y apellido de la nueva persona:') || '').trim();
+  if(!nombre) return '';
+  if(!DATA.catalogos) ensureCatalogos();
+  if(!Array.isArray(DATA.catalogos.personas)) DATA.catalogos.personas = [];
+  if(!personasList().some(p => p.nombre.toLowerCase() === nombre.toLowerCase())){
+    DATA.catalogos.personas.push({ nombre, email: '' });
+    DATA.catalogos.personas.sort((a,b) => a.nombre.localeCompare(b.nombre,'es'));
+    await saveData();
+    renderPersonasDatalist();
+    showToast('Persona agregada. Cargá su correo en Gestionar catálogos → Personas.');
+  }
+  return nombre;
+}
+// Manejador para desplegables de persona que se leen del DOM al guardar (ej. sugerencia)
+async function onPersonaSelect(sel){
+  if(sel.value !== '__NUEVA__') return;
+  const nombre = await agregarPersonaRapida();
+  sel.innerHTML = personaOptionsHtml(nombre);
+  sel.value = nombre;
+}
 function renderPersonasDatalist(){
   const dl = document.getElementById('personasDatalist');
   if(!dl) return;
@@ -1696,7 +1742,7 @@ function renderInvestigadoresList(){
   wrap.innerHTML = modalInvestigadores.map((inv,i)=>`
     <div class="field-row" style="align-items:flex-end;">
       <div class="field"><label style="font-size:11px;">Nombre</label>
-        <input type="text" list="personasDatalist" value="${(inv.nombre||'').replace(/"/g,'&quot;')}" placeholder="Nombre" oninput="updateInvestigadorField(${i},'nombre',this.value)">
+        <input type="text" value="${(inv.nombre||'').replace(/"/g,'&quot;')}" placeholder="Nombre" oninput="updateInvestigadorField(${i},'nombre',this.value)">
       </div>
       <div class="field"><label style="font-size:11px;">Cargo</label>
         <select onchange="updateInvestigadorField(${i},'cargo',this.value)">${cargoOptionsHtml(inv.cargo)}</select>
@@ -1733,6 +1779,10 @@ function removeAccion(tipoAccion, i){
 function updateAccionField(tipoAccion, i, field, value){
   const arr = accionesArray(tipoAccion);
   if(!arr[i]) return;
+  if(field === 'responsable' && value === '__NUEVA__'){
+    agregarPersonaRapida().then(nombre => { arr[i].responsable = nombre; renderAccionesBlock(tipoAccion); });
+    return;
+  }
   arr[i][field] = value;
   if(field === 'estado'){
     if(value === 'Cerrado' && !arr[i].fecha_cierre) arr[i].fecha_cierre = todayISO();
@@ -1769,7 +1819,7 @@ function renderAccionesBlock(tipoAccion){
       </div>
       <div class="field-row-3">
         <div class="field"><label>Responsable</label>
-          <input type="text" list="personasDatalist" value="${a.responsable||''}" oninput="updateAccionField('${tipoAccion}',${i},'responsable',this.value)">
+          <select onchange="updateAccionField('${tipoAccion}',${i},'responsable',this.value)">${personaOptionsHtml(a.responsable)}</select>
         </div>
         <div class="field"><label>Fecha de vencimiento</label>
           <input type="date" value="${a.vencimiento||''}" oninput="updateAccionField('${tipoAccion}',${i},'vencimiento',this.value)">
@@ -2136,6 +2186,7 @@ async function saveRecord(){
     sug_area: esSug ? getIf('f_sug_area') : '',
     sug_realiza: esSug ? getIf('f_sug_realiza') : '',
     sug_observacion: esSug ? getIf('f_sug_observacion') : '',
+    sug_notif_resp: '',
     adjuntos: JSON.parse(JSON.stringify(modalAttachments)),
   };
   if(!rec.fecha || !rec.titulo || !rec.descripcion){
@@ -2154,6 +2205,7 @@ async function saveRecord(){
       rec.visado_email = prev.visado_email;
       rec.visado_fecha = prev.visado_fecha;
     }
+    if(prev) rec.sug_notif_resp = prev.sug_notif_resp || '';
   }
 
   if(editingId){
@@ -2162,9 +2214,9 @@ async function saveRecord(){
   } else {
     DATA.records.push(rec);
   }
-  registrarPersonaSiEsNueva(rec.reportado_nombre);
-  registrarPersonaSiEsNueva(rec.responsable);
-  registrarPersonaSiEsNueva(rec.sug_resp_notif);
+  // Solo los responsables reales alimentan el catálogo de personas (el "reportado por" y el
+  // "responsable de comunicar" son informativos/tipeados y no deben poblar el desplegable).
+  if(esSug) registrarPersonaSiEsNueva(rec.responsable);
   [...rec.acciones_correctivas, ...rec.acciones_preventivas].forEach(a => registrarPersonaSiEsNueva(a.responsable));
   const nuevasLA = manageLeccionesAprendidas(rec);
   const cambiados = [rec];
@@ -2174,9 +2226,61 @@ async function saveRecord(){
       if(la) cambiados.push(la);
     }
   });
+
+  // ===== Notificaciones por correo =====
+  const notifs = [];
+  const linkHtml = `<p style="margin-top:14px;"><a href="${APP_URL}" style="color:#0A3A66;">Ingresar a HSQE Integra</a></p>`;
+  // 1) Responsables de acciones recién asignados (o que cambiaron)
+  if(!tipoSinAcciones){
+    const procAccion = (a, tipoAcc) => {
+      const nombre = (a.responsable||'').trim();
+      if(!nombre) return;
+      const email = personaEmail(nombre);
+      if(!email) return;
+      if((a.notif_resp||'') === email) return; // ya se le avisó a esa persona
+      a.notif_resp = email;
+      notifs.push({
+        to: email,
+        subject: `HSQE Integra — Acción asignada · Reporte ${rec.id}`,
+        html: `<p>${nombre} — Se le ha asignado como responsable para una acción ${tipoAcc} en el reporte N° <b>${rec.id}</b>${rec.titulo?` (${rec.titulo})`:''}.</p><p>Por favor, ingresar a HSQE Integra para indicar sus novedades.</p>${linkHtml}`,
+      });
+    };
+    (rec.acciones_correctivas||[]).forEach(a => procAccion(a, 'correctiva'));
+    (rec.acciones_preventivas||[]).forEach(a => procAccion(a, 'preventiva'));
+  }
+  // 1b) Responsable de la sugerencia
+  if(esSug){
+    const nombre = (rec.responsable||'').trim();
+    const email = personaEmail(nombre);
+    if(email && (rec.sug_notif_resp||'') !== email){
+      rec.sug_notif_resp = email;
+      notifs.push({
+        to: email,
+        subject: `HSQE Integra — Sugerencia asignada · Reporte ${rec.id}`,
+        html: `<p>${nombre} — Se le ha asignado como responsable para una sugerencia de mejora en el reporte N° <b>${rec.id}</b>${rec.titulo?` (${rec.titulo})`:''}.</p><p>Por favor, ingresar a HSQE Integra para indicar sus novedades.</p>${linkHtml}`,
+      });
+    }
+  }
+  // 2) Aviso al administrador por alta / actualización
+  notifs.push({
+    to: MAIL_ADMIN,
+    subject: `HSQE Integra — Reporte ${editingId?'actualizado':'nuevo'}: ${rec.id}`,
+    html: `<p>Se ${editingId?'actualizó':'cargó'} un reporte en HSQE Integra:</p>
+      <ul>
+        <li><b>N°:</b> ${rec.id}</li>
+        <li><b>Tipo:</b> ${(TYPES[rec.tipo]||{}).label||rec.tipo}</li>
+        <li><b>Título:</b> ${rec.titulo||'—'}</li>
+        <li><b>Instalación:</b> ${rec.instalacion||'—'}</li>
+        <li><b>Cliente / Operación:</b> ${rec.cliente_operacion||'—'}</li>
+        <li><b>Estado:</b> ${rec.estado||'—'}</li>
+        <li><b>Reportado por:</b> ${rec.reportado_por||'—'}</li>
+      </ul>${linkHtml}`,
+  });
+
   const resultados = await Promise.all(cambiados.map(r => upsertRegistro(r)));
   await saveCatalogos(); // personas nuevas registradas
   if(resultados.some(ok => !ok)){ return; } // error ya notificado; el modal queda abierto
+  enviarNotificaciones(notifs); // envío en segundo plano
   closeModal();
   renderAll();
   showToast(nuevasLA>0 ? `Registro guardado — se ${nuevasLA===1?'generó 1 Lección Aprendida':'generaron '+nuevasLA+' Lecciones Aprendidas'} para seguimiento` : (editingId? 'Registro actualizado' : 'Registro creado'));
@@ -3131,7 +3235,7 @@ async function printRecordPDF(id){
 }
 
 /* ============ INIT ============ */
-Object.assign(window, { addAccion, addAttachmentFile, addAttachmentManual, addCatalogItem, addDotacionMes, addInvestigador, addLeccion, addPersona, addVessel, addVisador, clearFilters, closeModal, deleteRecord, exportData, printRecordPDF, openAttachment, openCatalogManager, openRecordForm, openVisadoresManager, printChartsReport, printCompanyReport, removeAccion, removeAttachment, removeCatalogItem, removeDotacionMes, removeInvestigador, removeLeccion, removePersona, removeVessel, removeVisador, renderAll, renderAuditNcKpi, renderOcimfKpi, renderScoreCard, setScoreCardYear, setScoreCardTarget, renderTable, saveRecord, setCompanyLogo, setSiteFilter, setClienteFilter, setTypeFilter, toggleCategoriaOtro, toggleTipificacionCausaOtro, toggleVisado, updateAccionField, updateInvestigadorField, updatePersonaField, updateVesselOptions, validateEstadoCierre, refreshData, logoutHsqe });
+Object.assign(window, { addAccion, addAttachmentFile, addAttachmentManual, addCatalogItem, addDotacionMes, addInvestigador, addLeccion, addPersona, addVessel, addVisador, clearFilters, closeModal, deleteRecord, exportData, printRecordPDF, openAttachment, openCatalogManager, openRecordForm, openVisadoresManager, printChartsReport, printCompanyReport, removeAccion, removeAttachment, removeCatalogItem, removeDotacionMes, removeInvestigador, removeLeccion, removePersona, removeVessel, removeVisador, renderAll, renderAuditNcKpi, renderOcimfKpi, renderScoreCard, setScoreCardYear, setScoreCardTarget, renderTable, saveRecord, setCompanyLogo, setSiteFilter, setClienteFilter, setTypeFilter, toggleCategoriaOtro, toggleTipificacionCausaOtro, toggleVisado, updateAccionField, updateInvestigadorField, updatePersonaField, onPersonaSelect, agregarPersonaRapida, updateVesselOptions, validateEstadoCierre, refreshData, logoutHsqe });
 
 async function logoutHsqe(){
   await supabase.auth.signOut();
