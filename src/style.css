@@ -164,6 +164,10 @@
     #printReport .chart-card{ page-break-inside:avoid; break-inside:avoid; }
     #printReport .chart-card img{ width:auto !important; max-width:100% !important; max-height:165px !important; display:block; margin:0 auto; object-fit:contain; }
     #printReport tr, #printReport td, #printReport th{ page-break-inside:avoid; }
+    /* Los registros arrancan en su propia página, con un margen superior propio
+       (así hay separación arriba aunque el navegador ignore el margen de página). */
+    #printReport .pr-registros{ page-break-before: always; padding-top: 6mm; }
+    #printReport .pr-registros thead th{ padding-top: 10px; }
   }
 
 

@@ -2646,7 +2646,7 @@ async function printChartsReport(){
     ${ocimfHtml}
     ${auditNcHtml}
     ${scoreHtml}
-    ${kpiMode ? '' : `<div style="margin-top:18px;">
+    ${kpiMode ? '' : `<div class="pr-registros">
       <h3 style="font-family:'Saira';font-size:16px;color:#002247;border-bottom:2px solid #0A3A66;padding-bottom:4px;">${bilingual(`Registros incluidos`)}</h3>
       ${tableHtml}
     </div>`}
