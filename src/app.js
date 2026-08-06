@@ -370,6 +370,8 @@ function ensureCatalogos(){
   if(!DATA.catalogos) DATA.catalogos = {};
   const c = DATA.catalogos;
   if(!Array.isArray(c.personas)) c.personas = [];
+  c.personas = c.personas.map(p => (typeof p === 'string' ? { nombre: p.split('/')[0].trim(), email: '' } : { nombre: ((p&&p.nombre)||'').trim(), email: ((p&&p.email)||'').trim() })).filter(p => p.nombre);
+  c.personas.sort((a,b) => a.nombre.localeCompare(b.nombre, 'es'));
   if(!Array.isArray(c.clasifOrigen)) c.clasifOrigen = CLASIF_ORIGEN.slice();
   if(!Array.isArray(c.categoriasActoInseguro)) c.categoriasActoInseguro = CATEGORIAS_ACTO_INSEGURO.slice();
   if(!Array.isArray(c.categoriasCondicionInsegura)) c.categoriasCondicionInsegura = CATEGORIAS_CONDICION_INSEGURA.slice();
@@ -379,7 +381,6 @@ function ensureCatalogos(){
   if(!Array.isArray(c.clientes)) c.clientes = CLIENTES.slice();
   if(!c.clientes.includes('No Asignado a Cliente')) c.clientes.push('No Asignado a Cliente');
   if(!c.dotacionMensual || typeof c.dotacionMensual !== 'object' || Array.isArray(c.dotacionMensual)) c.dotacionMensual = {};
-  ordenarAlfa(c.personas);
   ordenarAlfa(c.clasifOrigen);
   ordenarAlfa(c.categoriasActoInseguro);
   ordenarAlfa(c.categoriasCondicionInsegura);
@@ -1603,16 +1604,25 @@ function openRecordForm(id){
   toggleConditionalFields();
   toggleTipificacionCausaOtro();
 }
+// Personas ahora son {nombre, email}. Esta capa tolera entradas viejas (strings).
+function normPersona(p){
+  if(typeof p === 'string') return { nombre: p.split('/')[0].trim(), email: '' };
+  return { nombre: ((p && p.nombre) || '').trim(), email: ((p && p.email) || '').trim() };
+}
+function personasList(){
+  const raw = (DATA.catalogos && DATA.catalogos.personas) || [];
+  return raw.map(normPersona).filter(p => p.nombre);
+}
+function personaEmail(nombre){
+  const n = (nombre||'').trim().toLowerCase();
+  if(!n) return '';
+  const found = personasList().find(p => p.nombre.toLowerCase() === n);
+  return found ? found.email : '';
+}
 function renderPersonasDatalist(){
   const dl = document.getElementById('personasDatalist');
   if(!dl) return;
-  const raw = (DATA.catalogos && DATA.catalogos.personas) || [];
-  // Solo nombres: si alguna entrada vieja quedó como "Nombre / Cargo", se muestra solo el nombre.
-  const nombres = [];
-  raw.forEach(p => {
-    const nombre = String(p).split('/')[0].trim();
-    if(nombre && !nombres.some(n => n.toLowerCase() === nombre.toLowerCase())) nombres.push(nombre);
-  });
+  const nombres = [...new Set(personasList().map(p => p.nombre))];
   nombres.sort((a,b) => a.localeCompare(b, 'es'));
   dl.innerHTML = nombres.map(p => `<option value="${p.replace(/"/g,'&quot;')}">`).join('');
 }
@@ -1621,8 +1631,9 @@ function registrarPersonaSiEsNueva(nombre){
   const n = nombre.trim();
   if(!n) return;
   if(!DATA.catalogos) ensureCatalogos();
-  const existe = DATA.catalogos.personas.some(p=>p.toLowerCase()===n.toLowerCase());
-  if(!existe){ DATA.catalogos.personas.push(n); ordenarAlfa(DATA.catalogos.personas); }
+  if(!Array.isArray(DATA.catalogos.personas)) DATA.catalogos.personas = [];
+  const existe = personasList().some(p => p.nombre.toLowerCase() === n.toLowerCase());
+  if(!existe){ DATA.catalogos.personas.push({ nombre: n, email: '' }); }
 }
 function leccionesFromRecord(r){
   if(!r || !r.lecciones_aprendidas) return [];
@@ -2399,9 +2410,7 @@ function renderCatalogManager(){
      <div style="margin-bottom:14px;"><button class="btn secondary" onclick="openVisadoresManager()">👤 Gestionar visadores</button></div>` +
     sitiosSectionHtml() +
     dotacionSectionHtml() +
-    catalogSectionHtml('Personas (Responsable / Reportado por)',
-      'Se usan como sugerencia al escribir en los campos "Responsable" y "Reportado por". También se agregan solas cuando cargás un nombre nuevo.',
-      'personas', cat.personas) +
+    personasSectionHtml() +
     catalogSectionHtml('Cargos (Reportado por)',
       'Opciones del desplegable "Cargo" en el campo "Reportado por".',
       'cargos', cat.cargos.filter(c=>c)) +
@@ -2418,6 +2427,59 @@ function renderCatalogManager(){
       'Opciones del campo "Clasificación" para estos cuatro tipos.',
       'clasifOrigen', cat.clasifOrigen.filter(c=>c));
 }
+/* ============ CATÁLOGO DE PERSONAS (nombre + email) ============ */
+function personasSectionHtml(){
+  const list = personasList();
+  const rows = list.length ? list.map((p,i)=>`
+    <div class="field-row-3" style="align-items:flex-end;margin-bottom:6px;">
+      <div class="field" style="margin-bottom:0;"><input type="text" value="${p.nombre.replace(/"/g,'&quot;')}" placeholder="Nombre y apellido" onchange="updatePersonaField(${i},'nombre',this.value)"></div>
+      <div class="field" style="margin-bottom:0;"><input type="email" value="${(p.email||'').replace(/"/g,'&quot;')}" placeholder="correo@ploffshore.com" onchange="updatePersonaField(${i},'email',this.value)"></div>
+      <button class="btn secondary" style="padding:6px 10px;color:var(--red);justify-self:start;" onclick="removePersona(${i})">✕ Quitar</button>
+    </div>`).join('') : '<div style="font-size:12px;color:var(--graphite-light);margin-bottom:6px;">Sin personas cargadas.</div>';
+  return `<div class="section-title" style="margin-top:16px;">Personas (Responsable / Reportado por)</div>
+    <div style="font-size:11px;color:var(--graphite-light);margin:-4px 0 8px;">Nombre y apellido de cada persona y su correo. El correo se usa para notificar cuando se le asigna una acción o una sugerencia. Las personas se agregan solas al cargar un nombre nuevo en un registro; acá completás el mail.</div>
+    ${rows}
+    <div class="field-row-3" style="align-items:flex-end;">
+      <div class="field" style="margin-bottom:0;"><input type="text" id="newPersonaNombre" placeholder="Nombre y apellido"></div>
+      <div class="field" style="margin-bottom:0;"><input type="email" id="newPersonaEmail" placeholder="correo@ploffshore.com"></div>
+      <button class="btn" style="padding:6px 12px;justify-self:start;" onclick="addPersona()">+ Agregar</button>
+    </div>`;
+}
+async function updatePersonaField(i, field, val){
+  const arr = personasList();
+  if(!arr[i]) return;
+  arr[i][field] = (val||'').trim();
+  DATA.catalogos.personas = arr;
+  await saveData();
+  renderPersonasDatalist();
+  showToast('Guardado');
+}
+async function addPersona(){
+  const nombre = (document.getElementById('newPersonaNombre').value||'').trim();
+  const email = (document.getElementById('newPersonaEmail').value||'').trim();
+  if(!nombre){ showToast('Ingresá el nombre y apellido'); return; }
+  if(personasList().some(p=>p.nombre.toLowerCase()===nombre.toLowerCase())){ showToast('Esa persona ya existe'); return; }
+  const arr = personasList();
+  arr.push({ nombre, email });
+  arr.sort((a,b)=>a.nombre.localeCompare(b.nombre,'es'));
+  DATA.catalogos.personas = arr;
+  await saveData();
+  renderCatalogManager();
+  renderPersonasDatalist();
+  showToast('Persona agregada');
+}
+async function removePersona(i){
+  const arr = personasList();
+  if(!arr[i]) return;
+  if(!confirm(`¿Quitar a ${arr[i].nombre} del catálogo de personas?`)) return;
+  arr.splice(i,1);
+  DATA.catalogos.personas = arr;
+  await saveData();
+  renderCatalogManager();
+  renderPersonasDatalist();
+  showToast('Persona quitada');
+}
+
 async function addCatalogItem(listKey){
   const inp = document.getElementById('newItem_'+listKey);
   const v = inp.value.trim();
@@ -3030,7 +3092,7 @@ async function printRecordPDF(id){
 }
 
 /* ============ INIT ============ */
-Object.assign(window, { addAccion, addAttachmentFile, addAttachmentManual, addCatalogItem, addDotacionMes, addInvestigador, addLeccion, addVessel, addVisador, clearFilters, closeModal, deleteRecord, exportData, printRecordPDF, openAttachment, openCatalogManager, openRecordForm, openVisadoresManager, printChartsReport, printCompanyReport, removeAccion, removeAttachment, removeCatalogItem, removeDotacionMes, removeInvestigador, removeLeccion, removeVessel, removeVisador, renderAll, renderAuditNcKpi, renderOcimfKpi, renderScoreCard, setScoreCardYear, setScoreCardTarget, renderTable, saveRecord, setCompanyLogo, setSiteFilter, setClienteFilter, setTypeFilter, toggleCategoriaOtro, toggleTipificacionCausaOtro, toggleVisado, updateAccionField, updateInvestigadorField, updateVesselOptions, validateEstadoCierre, refreshData, logoutHsqe });
+Object.assign(window, { addAccion, addAttachmentFile, addAttachmentManual, addCatalogItem, addDotacionMes, addInvestigador, addLeccion, addPersona, addVessel, addVisador, clearFilters, closeModal, deleteRecord, exportData, printRecordPDF, openAttachment, openCatalogManager, openRecordForm, openVisadoresManager, printChartsReport, printCompanyReport, removeAccion, removeAttachment, removeCatalogItem, removeDotacionMes, removeInvestigador, removeLeccion, removePersona, removeVessel, removeVisador, renderAll, renderAuditNcKpi, renderOcimfKpi, renderScoreCard, setScoreCardYear, setScoreCardTarget, renderTable, saveRecord, setCompanyLogo, setSiteFilter, setClienteFilter, setTypeFilter, toggleCategoriaOtro, toggleTipificacionCausaOtro, toggleVisado, updateAccionField, updateInvestigadorField, updatePersonaField, updateVesselOptions, validateEstadoCierre, refreshData, logoutHsqe });
 
 async function logoutHsqe(){
   await supabase.auth.signOut();
