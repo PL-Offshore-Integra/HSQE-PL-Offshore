@@ -2637,6 +2637,10 @@ async function printChartsReport(){
         <td style="width:30%;text-align:right;">${logo?`<img src="${logo}" style="max-height:60px;max-width:160px;">`:''}</td>
       </tr>
     </table>
+    ${currentClienteFilter!=='ALL' ? `<div style="background:#EAF1F8;border-left:4px solid #002247;padding:9px 14px;margin-bottom:14px;">
+      <div style="font-family:'Saira';font-size:15px;font-weight:700;color:#002247;letter-spacing:0.02em;">${currentClienteFilter==='No Asignado a Cliente' ? 'Registros sin cliente / operación asignado' : 'Registros durante la operación: '+currentClienteFilter}
+        <span style="font-style:italic;font-weight:400;color:#9AA6B2;font-size:12px;">· ${currentClienteFilter==='No Asignado a Cliente' ? 'Records with no client / operation assigned' : 'Records for operation: '+currentClienteFilter}</span></div>
+    </div>` : ''}
     ${kpiHtmlBil}
     ${chartsHtml}
     ${ocimfHtml}
