@@ -2666,7 +2666,7 @@ async function printChartsReport(){
   // Portada/gráficos: imprimir en horizontal (A4 landscape) para leer mejor la tabla.
   let orient = document.getElementById('__pageOrient');
   if(!orient){ orient = document.createElement('style'); orient.id = '__pageOrient'; document.head.appendChild(orient); }
-  orient.textContent = '@page{ size: A4 landscape; margin: 10mm; }';
+  orient.textContent = '@page{ size: A4 landscape; margin: 16mm 12mm; }';
   window.print();
 }
 

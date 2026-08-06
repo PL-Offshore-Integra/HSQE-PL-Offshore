@@ -152,17 +152,17 @@
   .pr-sign-label{font-size:10px;color:var(--graphite-light);text-transform:uppercase;letter-spacing:0.04em;}
   .pr-sign-row{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:14px;}
   @media print{
-    @page{ margin:12mm; }
+    @page{ margin:16mm 12mm; }
     /* Ocultar la app con display:none (no visibility) para que NO deje altura fantasma
        que produce hojas en blanco al final del printable. */
     .sidebar, .main, #toast{ display:none !important; }
     .app{ display:block !important; min-height:0 !important; background:#fff !important; }
-    #printReport{ display:block !important; padding:8mm !important; }
-    /* KPIs y gráficos: layout ordenado para impresión */
-    #printReport .kpi-row{ grid-template-columns:repeat(4,1fr) !important; }
-    #printReport .chart-row{ grid-template-columns:1fr 1fr !important; gap:12px !important; }
+    #printReport{ display:block !important; padding:6mm 8mm !important; }
+    /* KPIs y gráficos: layout ordenado; los gráficos quedan juntos en una sola página */
+    #printReport .kpi-row{ grid-template-columns:repeat(4,1fr) !important; page-break-inside:avoid; break-inside:avoid; }
+    #printReport .chart-row{ grid-template-columns:1fr 1fr !important; gap:10px !important; page-break-inside:avoid; break-inside:avoid; }
     #printReport .chart-card{ page-break-inside:avoid; break-inside:avoid; }
-    #printReport .chart-card img{ width:auto !important; max-width:100% !important; max-height:210px !important; display:block; margin:0 auto; object-fit:contain; }
+    #printReport .chart-card img{ width:auto !important; max-width:100% !important; max-height:165px !important; display:block; margin:0 auto; object-fit:contain; }
     #printReport tr, #printReport td, #printReport th{ page-break-inside:avoid; }
   }
 
