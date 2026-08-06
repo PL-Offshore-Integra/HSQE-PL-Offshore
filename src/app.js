@@ -2040,6 +2040,29 @@ async function saveRecord(){
     return;
   }
 
+  // Responsable obligatorio (nombre y apellido) donde se dispara notificación:
+  // cada acción correctiva/preventiva con contenido, y el responsable de la sugerencia.
+  if(!tipoSinAcciones){
+    const accionSinResp = [...modalAccionesCorrectivas, ...modalAccionesPreventivas]
+      .find(a => (a.descripcion||'').trim() && !(a.responsable||'').trim());
+    if(accionSinResp){
+      showToast('Cada acción correctiva/preventiva debe tener un responsable asignado (nombre y apellido)');
+      return;
+    }
+  }
+  if(esSug && !getIf('f_sug_resp').trim()){
+    showToast('La sugerencia debe tener un responsable asignado (nombre y apellido)');
+    return;
+  }
+
+  // Aviso (no bloquea) si algún responsable asignado todavía no tiene correo cargado.
+  const respAsignados = [
+    ...(tipoSinAcciones ? [] : [...modalAccionesCorrectivas, ...modalAccionesPreventivas].map(a => (a.responsable||'').trim())),
+    esSug ? getIf('f_sug_resp').trim() : '',
+    esSug ? getIf('f_sug_resp_notif').trim() : '',
+  ].filter(Boolean);
+  const sinMail = [...new Set(respAsignados)].filter(n => !personaEmail(n));
+
   const rec = {
     id: editingId || generateRecordId(tipoSel, fechaSel),
     tipo: tipoSel,
@@ -2148,6 +2171,9 @@ async function saveRecord(){
   closeModal();
   renderAll();
   showToast(nuevasLA>0 ? `Registro guardado — se ${nuevasLA===1?'generó 1 Lección Aprendida':'generaron '+nuevasLA+' Lecciones Aprendidas'} para seguimiento` : (editingId? 'Registro actualizado' : 'Registro creado'));
+  if(sinMail.length){
+    setTimeout(() => showToast('Ojo: sin correo cargado (no recibirán aviso): ' + sinMail.join(', ') + '. Cargalo en Catálogos → Personas.'), 2600);
+  }
 }
 function manageLeccionesAprendidas(rec){
   if(!TIPOS_CON_LECCIONES.includes(rec.tipo) || !Array.isArray(rec.lecciones_aprendidas)) return 0;
