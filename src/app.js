@@ -200,7 +200,7 @@ function cargoOptionsHtml(selected){
 }
 
 // Cliente / Operación (catálogo editable)
-let CLIENTES = ['','Operación propia','N/A'];
+let CLIENTES = ['','No Asignado a Cliente','Operación propia','N/A'];
 function clientesDisponibles(){
   return (DATA.catalogos && Array.isArray(DATA.catalogos.clientes)) ? DATA.catalogos.clientes.slice() : CLIENTES.slice();
 }
@@ -376,6 +376,7 @@ function ensureCatalogos(){
   if(!Array.isArray(c.tipificacionCausaRaiz)) c.tipificacionCausaRaiz = TIPIFICACION_CAUSA_RAIZ.slice();
   if(!Array.isArray(c.cargos)) c.cargos = CARGOS.slice();
   if(!Array.isArray(c.clientes)) c.clientes = CLIENTES.slice();
+  if(!c.clientes.includes('No Asignado a Cliente')) c.clientes.push('No Asignado a Cliente');
   if(!c.dotacionMensual || typeof c.dotacionMensual !== 'object' || Array.isArray(c.dotacionMensual)) c.dotacionMensual = {};
   ordenarAlfa(c.personas);
   ordenarAlfa(c.clasifOrigen);
@@ -1231,7 +1232,7 @@ function openRecordForm(id){
             <select id="f_tipo">${Object.keys(TYPES).map(k=>`<option value="${k}" ${k===tipo?'selected':''}>${TYPES[k].label}</option>`).join('')}</select>
           </div>
           <div class="field"><label>Cliente / Operación</label>
-            <select id="f_cliente">${clienteOptionsHtml(r?r.cliente_operacion:'')}</select>
+            <select id="f_cliente">${clienteOptionsHtml(r ? r.cliente_operacion : 'No Asignado a Cliente')}</select>
           </div>
         </div>
         <div class="field-row">
