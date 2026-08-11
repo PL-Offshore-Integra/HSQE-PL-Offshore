@@ -104,6 +104,7 @@
   .field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;}
   .field-row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px;}
   .field{margin-bottom:12px;}
+  .field-row > .field, .field-row-3 > .field{ display:flex; flex-direction:column; justify-content:flex-end; }
   .accion-row{border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:3px;padding:12px 14px 2px;margin-bottom:10px;background:#F7F9FB;}
   .accion-row-top{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
   .accion-num{font-family:'DM Mono';font-size:11px;color:var(--graphite);font-weight:600;}

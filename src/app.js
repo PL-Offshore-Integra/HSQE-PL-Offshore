@@ -1783,14 +1783,14 @@ function renderCapParticipantesList(){
   if(!wrap) return;
   if(modalCapParticipantes.length===0){ wrap.innerHTML = '<span style="font-size:12px;color:var(--graphite-light)">Sin participantes cargados.</span>'; return; }
   wrap.innerHTML = modalCapParticipantes.map((p,i)=>`
-    <div class="field-row" style="align-items:flex-end;">
-      <div class="field"><label style="font-size:11px;">Nombre y apellido</label>
+    <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:8px;">
+      <div class="field" style="flex:1;margin-bottom:0;"><label style="font-size:11px;">Nombre y apellido</label>
         <input type="text" value="${(p.nombre||'').replace(/"/g,'&quot;')}" placeholder="Nombre" oninput="updateCapParticipanteField(${i},'nombre',this.value)">
       </div>
-      <div class="field"><label style="font-size:11px;">Cargo</label>
+      <div class="field" style="flex:1;margin-bottom:0;"><label style="font-size:11px;">Cargo</label>
         <input type="text" value="${(p.cargo||'').replace(/"/g,'&quot;')}" placeholder="Cargo" oninput="updateCapParticipanteField(${i},'cargo',this.value)">
       </div>
-      <button class="btn secondary" style="padding:6px 10px;color:var(--red);" onclick="removeCapParticipante(${i})">✕</button>
+      <button class="btn secondary" style="padding:8px 12px;color:var(--red);flex:0 0 auto;" onclick="removeCapParticipante(${i})">✕</button>
     </div>`).join('');
 }
 
@@ -1815,14 +1815,14 @@ function renderInvestigadoresList(){
   if(!wrap) return;
   if(modalInvestigadores.length===0){ wrap.innerHTML = '<span style="font-size:12px;color:var(--graphite-light)">Sin investigadores adicionales.</span>'; return; }
   wrap.innerHTML = modalInvestigadores.map((inv,i)=>`
-    <div class="field-row" style="align-items:flex-end;">
-      <div class="field"><label style="font-size:11px;">Nombre</label>
+    <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:8px;">
+      <div class="field" style="flex:1;margin-bottom:0;"><label style="font-size:11px;">Nombre</label>
         <input type="text" value="${(inv.nombre||'').replace(/"/g,'&quot;')}" placeholder="Nombre" oninput="updateInvestigadorField(${i},'nombre',this.value)">
       </div>
-      <div class="field"><label style="font-size:11px;">Cargo</label>
+      <div class="field" style="flex:1;margin-bottom:0;"><label style="font-size:11px;">Cargo</label>
         <select onchange="updateInvestigadorField(${i},'cargo',this.value)">${cargoOptionsHtml(inv.cargo)}</select>
       </div>
-      <button class="btn secondary" style="padding:6px 10px;color:var(--red);" onclick="removeInvestigador(${i})">✕</button>
+      <button class="btn secondary" style="padding:8px 12px;color:var(--red);flex:0 0 auto;" onclick="removeInvestigador(${i})">✕</button>
     </div>`).join('');
 }
 
@@ -3030,6 +3030,13 @@ async function composeRecordBody(id){
     } else {
       body += `<p style="font-size:10.5pt;">Sin participantes cargados.</p>`;
     }
+    body += `<div style="margin-top:30px;width:55%;">
+      <div style="height:34px;"></div>
+      <div style="border-top:1px solid ${NAVY};padding-top:4px;">
+        <div style="font-size:9pt;color:${GRAPH};text-transform:uppercase;letter-spacing:0.5pt;">Firma del instructor <span style="font-style:italic;text-transform:none;color:#9AA6B2;">· Instructor's signature</span></div>
+        <div style="font-size:10.5pt;color:${NAVY};margin-top:2px;">${r.cap_instructor_nombre||''}${r.cap_instructor_cargo?' — '+r.cap_instructor_cargo:''}</div>
+      </div>
+    </div>`;
   }
 
   if(TIPOS_CON_OCIMF.includes(r.tipo) && r.clasificacion){
