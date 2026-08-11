@@ -45,6 +45,8 @@ const EN = {
   'Datos de la capacitación':'Training data','Evaluación de la capacitación':'Training evaluation',
   'Participantes':'Participants','Instructor':'Instructor','Duración':'Duration',
   'Parte del plan anual':'Part of annual plan','Fecha de la capacitación':'Training date',
+  'Tipo de capacitación':'Training type','Firma':'Signature',
+  'Nombre y apellido':'Full name','Cargo':'Position',
   'Descripción de la capacitación':'Training Description','Tema de la capacitación':'Training topic',
   // Encabezados de sección (PDF de registro)
   'Investigadores':'Investigators',
@@ -234,6 +236,18 @@ function clienteOptionsHtml(selected){
   return list.map(c=>`<option value="${(c||'').replace(/"/g,'&quot;')}" ${sel===c?'selected':''}>${c||'— Seleccionar —'}</option>`).join('');
 }
 
+// Tipo de capacitación (catálogo editable): HSQE, Operaciones, Salud, etc.
+let TIPOS_CAPACITACION = ['','HSQE','Operaciones','Salud','Seguridad','Medio Ambiente'];
+function tiposCapDisponibles(){
+  return (DATA.catalogos && Array.isArray(DATA.catalogos.tiposCapacitacion)) ? DATA.catalogos.tiposCapacitacion.slice() : TIPOS_CAPACITACION.slice();
+}
+function tiposCapOptionsHtml(selected){
+  const list = tiposCapDisponibles();
+  const sel = selected || '';
+  if(sel && !list.includes(sel)) list.push(sel);
+  return list.map(c=>`<option value="${(c||'').replace(/"/g,'&quot;')}" ${sel===c?'selected':''}>${c||'— Seleccionar —'}</option>`).join('');
+}
+
 
 const TIPO_LESION = ['',
   'Contusiones','Escoriaciones','Heridas cortantes','Heridas punzantes','Heridas contuso/anfractuosas',
@@ -404,6 +418,7 @@ function ensureCatalogos(){
   c.cargos = c.cargos.map(x => (typeof x === 'string' ? { cargo: x.trim(), email: '' } : { cargo: ((x&&x.cargo)||'').trim(), email: ((x&&x.email)||'').trim() })).filter(x => x.cargo);
   c.cargos.sort((a,b) => a.cargo.localeCompare(b.cargo, 'es'));
   if(!Array.isArray(c.clientes)) c.clientes = CLIENTES.slice();
+  if(!Array.isArray(c.tiposCapacitacion)) c.tiposCapacitacion = TIPOS_CAPACITACION.slice();
   if(!c.clientes.includes('No Asignado a Cliente')) c.clientes.push('No Asignado a Cliente');
   if(!c.dotacionMensual || typeof c.dotacionMensual !== 'object' || Array.isArray(c.dotacionMensual)) c.dotacionMensual = {};
   ordenarAlfa(c.clasifOrigen);
@@ -412,6 +427,7 @@ function ensureCatalogos(){
   ordenarAlfa(c.tipificacionIncidente);
   ordenarAlfa(c.tipificacionCausaRaiz);
   ordenarAlfa(c.clientes);
+  ordenarAlfa(c.tiposCapacitacion);
   if(DATA.companies[0]) ordenarAlfa(DATA.companies[0].vessels);
   CLASIF_ORIGEN = c.clasifOrigen;
   CATEGORIAS_ACTO_INSEGURO = c.categoriasActoInseguro;
@@ -420,6 +436,7 @@ function ensureCatalogos(){
   TIPIFICACION_CAUSA_RAIZ = c.tipificacionCausaRaiz;
   CARGOS = c.cargos;
   CLIENTES = c.clientes;
+  TIPOS_CAPACITACION = c.tiposCapacitacion;
 }
 function seedDefaults(){
   DATA.companies = [
@@ -1028,8 +1045,14 @@ function getChartSpecs(list, tipo){
     const doughSiNo = (title, campo) => ({ title, kind:'doughnut', labels:['Sí','No','Sin definir'],
       data:[ list.filter(r=>r[campo]==='Sí').length, list.filter(r=>r[campo]==='No').length, list.filter(r=>!r[campo]).length ],
       colors:['#1E7A4A','#C0392B','#8B96A1'] });
+    const tiposCap = [...new Set(list.map(r=>r.cap_tipo).filter(Boolean))];
+    const capPalette = ['#7A4FA0','#2C7FB8','#4C8C4A','#C0392B','#B07D0A','#0E7C86','#5B4B8A','#8B96A1'];
+    const specTipoCap = { title:'Por tipo de capacitación', kind:'doughnut',
+      labels: tiposCap.length ? tiposCap : ['Sin tipo'],
+      data: tiposCap.length ? tiposCap.map(t => list.filter(r=>r.cap_tipo===t).length) : [list.length],
+      colors: tiposCap.length ? tiposCap.map((_,i)=>capPalette[i%capPalette.length]) : ['#8B96A1'] };
     return { scope: TYPES[tipo].label, specs: [
-      doughSiNo('¿Fue efectiva?', 'cap_efectiva'),
+      specTipoCap,
       doughSiNo('Parte del plan anual', 'cap_plan_anual'),
       specInstalacion,
     ]};
@@ -1140,6 +1163,13 @@ function renderTable(){
     sevFilterEl.style.display = mostrarSeveridad ? '' : 'none';
     if(!mostrarSeveridad) sevFilterEl.value = '';
   }
+  // Capacitación no maneja estado: se oculta el filtro de estado en esa sección.
+  const mostrarEstado = currentTypeFilter !== 'CAP';
+  const statusFilterEl = document.getElementById('statusFilter');
+  if(statusFilterEl){
+    statusFilterEl.style.display = mostrarEstado ? '' : 'none';
+    if(!mostrarEstado) statusFilterEl.value = '';
+  }
 
   if(list.length===0){
     document.getElementById('tableWrap').innerHTML = `
@@ -1161,7 +1191,7 @@ function renderTable(){
       <td>${r.instalacion||'—'}</td>
       <td class="mono" style="font-size:12px;white-space:nowrap;">${fmtDate(r.fecha)}</td>
       <td class="desc-cell" style="font-size:11.5px;">${((r.titulo||r.descripcion)||'').slice(0,80)}${((r.titulo||r.descripcion)||'').length>80?'…':''}</td>
-      <td><div class="status-cell" style="white-space:nowrap;"><span class="status-dot" style="background:${STATUS[r.estado]}"></span>${r.estado}${r.visado ? ' <span title="Visado por Responsable HSQE/DPA" style="color:#1E7A4A;font-weight:bold;">✔</span>' : ''}</div></td>
+      <td>${r.tipo==='CAP' ? '<span style="color:var(--graphite-light)">—</span>' : `<div class="status-cell" style="white-space:nowrap;"><span class="status-dot" style="background:${STATUS[r.estado]}"></span>${r.estado}${r.visado ? ' <span title="Visado por Responsable HSQE/DPA" style="color:#1E7A4A;font-weight:bold;">✔</span>' : ''}</div>`}</td>
       <td class="mono ${isOverdue(r)?'overdue':''}" style="font-size:12px;white-space:nowrap;">${isOverdue(r)?'⚠ ':''}${resumen.vencimiento?fmtDate(resumen.vencimiento):'—'}</td>
       <td>${resumen.responsable}</td>
       <td style="text-align:center">${nAdj>0 ? '📎 '+nAdj : '—'}</td>
@@ -1297,10 +1327,12 @@ function openRecordForm(id){
           </div>
         </div>
 
+        <div id="block_reportado">
         <div class="section-title" style="border-top:none;padding-top:0;margin-top:14px;">Reportado por <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--graphite-light);">(informativo)</span></div>
         <div class="field">
           <label>Nombre y apellido</label>
           <input type="text" id="f_reportado_nombre" value="${repNombre.replace(/"/g,'&quot;')}" placeholder="Ej: Daniel Pugliesi">
+        </div>
         </div>
 
         <div id="block_investigadores">
@@ -1561,20 +1593,24 @@ function openRecordForm(id){
         <div id="block_cap">
           <div class="section-title">Datos de la capacitación</div>
           <div class="field-row">
+            <div class="field"><label>Tipo de capacitación</label>
+              <select id="f_cap_tipo">${tiposCapOptionsHtml(r?(r.cap_tipo||''):'')}</select>
+            </div>
+            <div class="field"><label>Duración</label>
+              <input type="text" id="f_cap_duracion" value="${r?(r.cap_duracion||'').replace(/"/g,'&quot;'):''}" placeholder="Ej: 2 horas, 90 min">
+            </div>
+          </div>
+          <div class="field-row">
             <div class="field"><label>Instructor — Nombre</label>
               <input type="text" id="f_cap_instructor" value="${r?(r.cap_instructor_nombre||'').replace(/"/g,'&quot;'):''}" placeholder="Ej: Juan Pérez">
             </div>
             <div class="field"><label>Instructor — Cargo</label>
-              <select id="f_cap_instructor_cargo">${cargoOptionsHtml(r?(r.cap_instructor_cargo||''):'')}</select>
+              <input type="text" id="f_cap_instructor_cargo" value="${r?(r.cap_instructor_cargo||'').replace(/"/g,'&quot;'):''}" placeholder="Ej: Oficial de Seguridad">
             </div>
           </div>
-          <div class="field-row">
-            <div class="field"><label>Duración</label>
-              <input type="text" id="f_cap_duracion" value="${r?(r.cap_duracion||'').replace(/"/g,'&quot;'):''}" placeholder="Ej: 2 horas, 90 min">
-            </div>
-            <div class="field"><label>¿Parte del plan anual de capacitación?</label>
-              <select id="f_cap_plan_anual">${['','Sí','No'].map(o=>`<option value="${o}" ${r&&r.cap_plan_anual===o?'selected':''}>${o||'Seleccionar...'}</option>`).join('')}</select>
-            </div>
+          <div class="field">
+            <label>¿Parte del plan anual de capacitación?</label>
+            <select id="f_cap_plan_anual">${['','Sí','No'].map(o=>`<option value="${o}" ${r&&r.cap_plan_anual===o?'selected':''}>${o||'Seleccionar...'}</option>`).join('')}</select>
           </div>
           <div class="section-title with-btn" style="margin-top:8px;">
             <span style="font-size:12.5px;">Participantes</span>
@@ -1752,7 +1788,7 @@ function renderCapParticipantesList(){
         <input type="text" value="${(p.nombre||'').replace(/"/g,'&quot;')}" placeholder="Nombre" oninput="updateCapParticipanteField(${i},'nombre',this.value)">
       </div>
       <div class="field"><label style="font-size:11px;">Cargo</label>
-        <select onchange="updateCapParticipanteField(${i},'cargo',this.value)">${cargoOptionsHtml(p.cargo)}</select>
+        <input type="text" value="${(p.cargo||'').replace(/"/g,'&quot;')}" placeholder="Cargo" oninput="updateCapParticipanteField(${i},'cargo',this.value)">
       </div>
       <button class="btn secondary" style="padding:6px 10px;color:var(--red);" onclick="removeCapParticipante(${i})">✕</button>
     </div>`).join('');
@@ -1888,6 +1924,7 @@ function toggleConditionalFields(){
   document.getElementById('block_comunicacion').style.display = (TIPOS_SIN_CAUSA_ACCION.includes(tipo) && !esSug && !esCap) ? 'block' : 'none';
   document.getElementById('block_sug_seguimiento').style.display = esSug ? 'block' : 'none';
   document.getElementById('block_cap').style.display = esCap ? 'block' : 'none';
+  document.getElementById('block_reportado').style.display = esCap ? 'none' : 'block';
   document.getElementById('block_gestion').style.display = (esSug || esCap) ? 'none' : 'block';
   document.getElementById('block_cuasi').style.display = (tipo === 'CUA') ? 'block' : 'none';
   document.getElementById('block_categoria_aici').style.display = (tipo === 'INC') ? 'block' : 'none';
@@ -2178,6 +2215,7 @@ async function saveRecord(){
     investigador_lider: esInc ? (getIf('f_investigador_lider_nombre').trim() + (getIf('f_investigador_lider_cargo') ? ' / ' + getIf('f_investigador_lider_cargo') : '')) : '',
     investigadores: esInc ? JSON.parse(JSON.stringify(modalInvestigadores.filter(i => (i.nombre||'').trim() || (i.cargo||'').trim()))) : [],
     cap_instructor_nombre: esCap ? getIf('f_cap_instructor').trim() : '',
+    cap_tipo: esCap ? getIf('f_cap_tipo') : '',
     cap_instructor_cargo: esCap ? getIf('f_cap_instructor_cargo') : '',
     cap_duracion: esCap ? getIf('f_cap_duracion').trim() : '',
     cap_efectiva: esCap ? getIf('f_cap_efectiva') : '',
@@ -2536,6 +2574,9 @@ function renderCatalogManager(){
     catalogSectionHtml('Cliente / Operación',
       'Opciones del desplegable "Cliente / Operación" de cada registro. También sirve como filtro en todas las secciones.',
       'clientes', (cat.clientes||[]).filter(c=>c)) +
+    catalogSectionHtml('Tipo de capacitación',
+      'Opciones del desplegable "Tipo de capacitación" (ej: HSQE, Operaciones, Salud). Se usa en la sección Capacitación y en su gráfico.',
+      'tiposCapacitacion', (cat.tiposCapacitacion||[]).filter(c=>c)) +
     catalogSectionHtml('Tipificación — Incidente',
       'Opciones disponibles al reportar un Incidente (daño a la carga, al buque, derrame, etc.).',
       'tipificacionIncidente', cat.tipificacionIncidente) +
@@ -2896,7 +2937,7 @@ async function composeRecordBody(id){
     {l:'Fecha '+tipoDescriptor(r.tipo), v:fmtDate(r.fecha)},
   ];
   if(r.tipo==='CAP'){
-    metaCells.push({l:'Reportado por', v:r.reportado_por||'—'});
+    metaCells.push({l:'Tipo de capacitación', v:r.cap_tipo||'—'});
     metaCells.push({l:'Instructor', v:(r.cap_instructor_nombre||'—')+(r.cap_instructor_cargo?' · '+r.cap_instructor_cargo:'')});
     metaCells.push({l:'Duración', v:r.cap_duracion||'—'});
     metaCells.push({l:'Parte del plan anual', v:r.cap_plan_anual||'—'});
@@ -2983,8 +3024,8 @@ async function composeRecordBody(id){
     body += secH3('Participantes');
     if(parts.length){
       body += `<table style="width:100%;border-collapse:collapse;margin-bottom:10px;font-size:10pt;">
-        <tr><th style="text-align:left;border:1px solid ${LINE};padding:5px 8px;background:#F2F5F8;">Nombre y apellido</th><th style="text-align:left;border:1px solid ${LINE};padding:5px 8px;background:#F2F5F8;">Cargo</th></tr>
-        ${parts.map(p=>`<tr><td style="border:1px solid ${LINE};padding:5px 8px;">${p.nombre||'—'}</td><td style="border:1px solid ${LINE};padding:5px 8px;">${p.cargo||'—'}</td></tr>`).join('')}
+        <tr><th style="text-align:left;border:1px solid ${LINE};padding:5px 8px;background:#F2F5F8;width:38%;">${bilingual('Nombre y apellido')}</th><th style="text-align:left;border:1px solid ${LINE};padding:5px 8px;background:#F2F5F8;width:27%;">${bilingual('Cargo')}</th><th style="text-align:left;border:1px solid ${LINE};padding:5px 8px;background:#F2F5F8;width:35%;">${bilingual('Firma')}</th></tr>
+        ${parts.map(p=>`<tr><td style="border:1px solid ${LINE};padding:8px;">${p.nombre||'—'}</td><td style="border:1px solid ${LINE};padding:8px;">${p.cargo||'—'}</td><td style="border:1px solid ${LINE};padding:8px;height:34px;"></td></tr>`).join('')}
       </table>`;
     } else {
       body += `<p style="font-size:10.5pt;">Sin participantes cargados.</p>`;
