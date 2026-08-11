@@ -1150,7 +1150,7 @@ function renderCharts(){
 function renderTable(){
   let list = applyDateFilter(filteredRecords(false));
   list = applyTableFilters(list);
-  list.sort((a,b)=> (b.fecha||'').localeCompare(a.fecha||''));
+  list.sort((a,b)=> (b.fecha||'').localeCompare(a.fecha||'') || (b.id||'').localeCompare(a.id||''));
 
   const title = currentTypeFilter==='ALL' ? 'Todos los registros' : TYPES[currentTypeFilter].label;
   document.getElementById('viewTitle').textContent = currentTypeFilter==='ALL' ? 'PL OFFSHORE - HSQE CONTROL PANEL' : title;
