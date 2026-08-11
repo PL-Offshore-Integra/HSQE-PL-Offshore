@@ -16,6 +16,7 @@ const TYPES = {
   AI:  {label:'Acto Inseguro',       color:'#B07D0A'},
   CI:  {label:'Condición Insegura',  color:'#B07D0A'},
   SUG: {label:'Sugerencia de Mejora', color:'#0E7C86'},
+  CAP: {label:'Capacitación',        color:'#7A4FA0'},
 };
 // Frase para personalizar etiquetas por tipo: "Fecha del incidente", "Título de la sugerencia de mejora", etc.
 const TIPO_DESCRIPTOR = {
@@ -29,6 +30,7 @@ const TIPO_DESCRIPTOR = {
   AI:  'del acto inseguro',
   CI:  'de la condición insegura',
   SUG: 'de la sugerencia de mejora',
+  CAP: 'de la capacitación',
 };
 function tipoDescriptor(tipo){ return TIPO_DESCRIPTOR[tipo] || 'del evento'; }
 
@@ -39,6 +41,11 @@ const EN = {
   'Lección Aprendida':'Lesson Learned','Accidente Personal':'Personal Accident','Incidente':'Incident',
   'Cuasi Accidente':'Near Miss','Acto Inseguro':'Unsafe Act','Condición Insegura':'Unsafe Condition',
   'Sugerencia de Mejora':'Improvement Suggestion',
+  'Capacitación':'Training',
+  'Datos de la capacitación':'Training data','Evaluación de la capacitación':'Training evaluation',
+  'Participantes':'Participants','Instructor':'Instructor','Duración':'Duration',
+  'Parte del plan anual':'Part of annual plan','Fecha de la capacitación':'Training date',
+  'Descripción de la capacitación':'Training Description','Tema de la capacitación':'Training topic',
   // Encabezados de sección (PDF de registro)
   'Investigadores':'Investigators',
   'Datos del incidente (condiciones al momento del evento)':'Incident data (conditions at the time of the event)',
@@ -146,7 +153,7 @@ let CLASIF_ORIGEN = ['','ISO','ISM','PNA','Inspección HSQE','Cliente','No Aplic
 // Oportunidad de Mejora y Lección Aprendida no llevan causa raíz/acción correctiva; llevan datos de comunicación
 // Solo Lección Aprendida no lleva causa raíz/acción correctiva; lleva datos de comunicación.
 // Oportunidad de Mejora se trata igual que Observación / No Conformidad (con causa raíz y acción correctiva).
-const TIPOS_SIN_CAUSA_ACCION = ['LA','SUG'];
+const TIPOS_SIN_CAUSA_ACCION = ['LA','SUG','CAP'];
 const MEDIOS_COMUNICACION = ['','Reunión de Seguridad','Correo Electrónico','Cartelera / Boletín HSQE','Charla de Seguridad (Toolbox Talk)','Sistema de Gestión (SGS)','Otro'];
 
 // Tipos que llevan campo "Lecciones Aprendidas" como parte del registro (Accidente / Incidente / Cuasi Accidente)
@@ -246,6 +253,7 @@ const PARTE_CUERPO = ['',
 let modalAttachments = [];
 let modalLecciones = [];
 let modalInvestigadores = [];
+let modalCapParticipantes = [];
 let modalAccionesCorrectivas = [];
 let modalAccionesPreventivas = [];
 let presetCategoriaEvento = null;
@@ -523,13 +531,15 @@ function setSiteFilter(v){ currentSiteFilter = v; renderAll(); }
 const NAV_GROUP_HALLAZGOS = ['NC','OBS','OM'];
 const NAV_GROUP_EVENTOS = ['INC','ACC','CUA','LA'];
 const NAV_ORDER_PROACTIVOS = ['AI','CI','SUG'];
-const NAV_ORDER_ALL_TYPES = [...NAV_GROUP_HALLAZGOS, ...NAV_GROUP_EVENTOS, ...NAV_ORDER_PROACTIVOS];
+const NAV_GROUP_CAPACITACION = ['CAP'];
+const NAV_ORDER_ALL_TYPES = [...NAV_GROUP_HALLAZGOS, ...NAV_GROUP_EVENTOS, ...NAV_ORDER_PROACTIVOS, ...NAV_GROUP_CAPACITACION];
 // Color del punto/bullet en el menú (independiente del color del tipo en tablas/gráficos)
 const NAV_DOT_COLORS = {
   ALL:'#FFFFFF',
   NC:'#E67E22', OBS:'#E67E22', OM:'#E67E22',            // naranja
   INC:'#C0392B', ACC:'#C0392B', CUA:'#C0392B', LA:'#C0392B', // rojo
   AI:'#8FC1E8', CI:'#8FC1E8', SUG:'#8FC1E8',            // celeste claro
+  CAP:'#B39DDB',                                        // violeta claro
 };
 function navDotColor(k){ return NAV_DOT_COLORS[k] || (TYPES[k] && TYPES[k].color) || '#B7C4CE'; }
 
@@ -544,6 +554,7 @@ function renderTypeNav(){
   html += label('Hallazgos', 12) + group(NAV_GROUP_HALLAZGOS);
   html += label('Reporte de Eventos', 12) + group(NAV_GROUP_EVENTOS);
   html += label('Reportes Proactivos', 12) + group(NAV_ORDER_PROACTIVOS);
+  html += label('Capacitación', 12) + group(NAV_GROUP_CAPACITACION);
   html += label('Objetivos', 12);
   html += `<div class="nav-item ${currentTypeFilter==='KPI'?'active':''}" onclick="setTypeFilter('KPI')">
     <span class="nav-dot" style="background:#2ECC71"></span>KPI HSQE
@@ -1011,6 +1022,16 @@ function getChartSpecs(list, tipo){
         data:[ list.filter(r=>r.sug_realiza==='Sí').length, list.filter(r=>r.sug_realiza==='No').length, list.filter(r=>!r.sug_realiza).length ],
         colors:['#1E7A4A','#C0392B','#8B96A1'] },
       specEstado, specInstalacion,
+    ]};
+  }
+  if(tipo === 'CAP'){
+    const doughSiNo = (title, campo) => ({ title, kind:'doughnut', labels:['Sí','No','Sin definir'],
+      data:[ list.filter(r=>r[campo]==='Sí').length, list.filter(r=>r[campo]==='No').length, list.filter(r=>!r[campo]).length ],
+      colors:['#1E7A4A','#C0392B','#8B96A1'] });
+    return { scope: TYPES[tipo].label, specs: [
+      doughSiNo('¿Fue efectiva?', 'cap_efectiva'),
+      doughSiNo('Parte del plan anual', 'cap_plan_anual'),
+      specInstalacion,
     ]};
   }
   // Fallback: la severidad solo se muestra en los tipos que la usan.
@@ -1537,6 +1558,42 @@ function openRecordForm(id){
           </div>
         </div>
 
+        <div id="block_cap">
+          <div class="section-title">Datos de la capacitación</div>
+          <div class="field-row">
+            <div class="field"><label>Instructor — Nombre</label>
+              <input type="text" id="f_cap_instructor" value="${r?(r.cap_instructor_nombre||'').replace(/"/g,'&quot;'):''}" placeholder="Ej: Juan Pérez">
+            </div>
+            <div class="field"><label>Instructor — Cargo</label>
+              <select id="f_cap_instructor_cargo">${cargoOptionsHtml(r?(r.cap_instructor_cargo||''):'')}</select>
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field"><label>Duración</label>
+              <input type="text" id="f_cap_duracion" value="${r?(r.cap_duracion||'').replace(/"/g,'&quot;'):''}" placeholder="Ej: 2 horas, 90 min">
+            </div>
+            <div class="field"><label>¿Parte del plan anual de capacitación?</label>
+              <select id="f_cap_plan_anual">${['','Sí','No'].map(o=>`<option value="${o}" ${r&&r.cap_plan_anual===o?'selected':''}>${o||'Seleccionar...'}</option>`).join('')}</select>
+            </div>
+          </div>
+          <div class="section-title with-btn" style="margin-top:8px;">
+            <span style="font-size:12.5px;">Participantes</span>
+            <button type="button" class="btn secondary" style="padding:5px 10px;" onclick="addCapParticipante()">+ Agregar participante</button>
+          </div>
+          <div id="capParticipantesList"></div>
+          <div class="field-row" style="margin-top:10px;">
+            <div class="field"><label>¿Fue efectiva?</label>
+              <select id="f_cap_efectiva">${['','Sí','No'].map(o=>`<option value="${o}" ${r&&r.cap_efectiva===o?'selected':''}>${o||'Seleccionar...'}</option>`).join('')}</select>
+            </div>
+            <div class="field"><label>¿Se realizó evaluación / actividad posterior?</label>
+              <select id="f_cap_evaluacion">${['','Sí','No'].map(o=>`<option value="${o}" ${r&&r.cap_evaluacion===o?'selected':''}>${o||'Seleccionar...'}</option>`).join('')}</select>
+            </div>
+          </div>
+          <div class="field"><label>Detalle de la evaluación / actividad posterior</label>
+            <textarea id="f_cap_evaluacion_detalle" placeholder="Ej: Cuestionario escrito, ejercicio práctico, evaluación oral...">${r?(r.cap_evaluacion_detalle||''):''}</textarea>
+          </div>
+        </div>
+
         <div id="block_gestion">
         <div class="section-title">Gestión</div>
         <div class="field-row">
@@ -1596,7 +1653,9 @@ function openRecordForm(id){
   modalLecciones = leccionesFromRecord(r);
   renderLeccionesList();
   modalInvestigadores = investigadoresFromRecord(r);
+  modalCapParticipantes = participantesFromRecord(r);
   renderInvestigadoresList();
+  renderCapParticipantesList();
   modalAccionesCorrectivas = accionesFromRecord(r, 'acciones_correctivas');
   modalAccionesPreventivas = accionesFromRecord(r, 'acciones_preventivas');
   renderAccionesBlock('correctiva');
@@ -1665,6 +1724,38 @@ function renderLeccionesList(){
       💡 ${l.texto} ${l.la_id?`<span class="mono" style="color:var(--graphite-light);font-size:10px;">(${l.la_id})</span>`:''}
       <span style="cursor:pointer;color:var(--red);margin-left:4px;" onclick="removeLeccion(${i})">✕</span>
     </span>`).join('');
+}
+
+/* ============ PARTICIPANTES (Capacitación) ============ */
+function participantesFromRecord(r){
+  if(r && Array.isArray(r.cap_participantes)) return JSON.parse(JSON.stringify(r.cap_participantes));
+  return [];
+}
+function addCapParticipante(){
+  modalCapParticipantes.push({ nombre:'', cargo:'' });
+  renderCapParticipantesList();
+}
+function removeCapParticipante(i){
+  modalCapParticipantes.splice(i,1);
+  renderCapParticipantesList();
+}
+function updateCapParticipanteField(i, campo, val){
+  if(modalCapParticipantes[i]) modalCapParticipantes[i][campo] = val;
+}
+function renderCapParticipantesList(){
+  const wrap = document.getElementById('capParticipantesList');
+  if(!wrap) return;
+  if(modalCapParticipantes.length===0){ wrap.innerHTML = '<span style="font-size:12px;color:var(--graphite-light)">Sin participantes cargados.</span>'; return; }
+  wrap.innerHTML = modalCapParticipantes.map((p,i)=>`
+    <div class="field-row" style="align-items:flex-end;">
+      <div class="field"><label style="font-size:11px;">Nombre y apellido</label>
+        <input type="text" value="${(p.nombre||'').replace(/"/g,'&quot;')}" placeholder="Nombre" oninput="updateCapParticipanteField(${i},'nombre',this.value)">
+      </div>
+      <div class="field"><label style="font-size:11px;">Cargo</label>
+        <select onchange="updateCapParticipanteField(${i},'cargo',this.value)">${cargoOptionsHtml(p.cargo)}</select>
+      </div>
+      <button class="btn secondary" style="padding:6px 10px;color:var(--red);" onclick="removeCapParticipante(${i})">✕</button>
+    </div>`).join('');
 }
 
 /* ============ INVESTIGADORES ADICIONALES (solo Incidente) ============ */
@@ -1790,11 +1881,14 @@ function toggleConditionalFields(){
   document.getElementById('block_clasif_origen').style.display = TIPOS_CON_CLASIF_ORIGEN.includes(tipo) ? 'block' : 'none';
   document.getElementById('block_auditoria_nc').style.display = (tipo === 'NC') ? 'block' : 'none';
   const esSug = (tipo === 'SUG');
+  const esCap = (tipo === 'CAP');
+  if(esCap) setLbl('label_titulo', 'Tema de la capacitación');
   document.getElementById('block_causa_accion').style.display = TIPOS_SIN_CAUSA_ACCION.includes(tipo) ? 'none' : 'block';
-  document.getElementById('block_responsable_simple').style.display = (TIPOS_SIN_CAUSA_ACCION.includes(tipo) && !esSug) ? 'grid' : 'none';
-  document.getElementById('block_comunicacion').style.display = (TIPOS_SIN_CAUSA_ACCION.includes(tipo) && !esSug) ? 'block' : 'none';
+  document.getElementById('block_responsable_simple').style.display = (TIPOS_SIN_CAUSA_ACCION.includes(tipo) && !esSug && !esCap) ? 'grid' : 'none';
+  document.getElementById('block_comunicacion').style.display = (TIPOS_SIN_CAUSA_ACCION.includes(tipo) && !esSug && !esCap) ? 'block' : 'none';
   document.getElementById('block_sug_seguimiento').style.display = esSug ? 'block' : 'none';
-  document.getElementById('block_gestion').style.display = esSug ? 'none' : 'block';
+  document.getElementById('block_cap').style.display = esCap ? 'block' : 'none';
+  document.getElementById('block_gestion').style.display = (esSug || esCap) ? 'none' : 'block';
   document.getElementById('block_cuasi').style.display = (tipo === 'CUA') ? 'block' : 'none';
   document.getElementById('block_categoria_aici').style.display = (tipo === 'INC') ? 'block' : 'none';
   // Bloques exclusivos de Incidente: investigadores, condiciones ambientales y descripción guiada
@@ -2009,7 +2103,8 @@ async function saveRecord(){
   const fechaSel = get('f_fecha');
   const tipoSinAcciones = TIPOS_SIN_CAUSA_ACCION.includes(tipoSel);
   const esSug = (tipoSel === 'SUG');
-  const estadoSel = esSug ? getIf('f_sug_estado') : get('f_estado');
+  const esCap = (tipoSel === 'CAP');
+  const estadoSel = esCap ? 'Cerrado' : (esSug ? getIf('f_sug_estado') : get('f_estado'));
   const esInc = (tipoSel === 'INC');
 
   // Descripción guiada del Incidente (8 preguntas). Se guarda como objeto q1..q8.
@@ -2082,6 +2177,14 @@ async function saveRecord(){
     investigador_lider_cargo: esInc ? getIf('f_investigador_lider_cargo') : '',
     investigador_lider: esInc ? (getIf('f_investigador_lider_nombre').trim() + (getIf('f_investigador_lider_cargo') ? ' / ' + getIf('f_investigador_lider_cargo') : '')) : '',
     investigadores: esInc ? JSON.parse(JSON.stringify(modalInvestigadores.filter(i => (i.nombre||'').trim() || (i.cargo||'').trim()))) : [],
+    cap_instructor_nombre: esCap ? getIf('f_cap_instructor').trim() : '',
+    cap_instructor_cargo: esCap ? getIf('f_cap_instructor_cargo') : '',
+    cap_duracion: esCap ? getIf('f_cap_duracion').trim() : '',
+    cap_efectiva: esCap ? getIf('f_cap_efectiva') : '',
+    cap_evaluacion: esCap ? getIf('f_cap_evaluacion') : '',
+    cap_evaluacion_detalle: esCap ? getIf('f_cap_evaluacion_detalle').trim() : '',
+    cap_plan_anual: esCap ? getIf('f_cap_plan_anual') : '',
+    cap_participantes: esCap ? JSON.parse(JSON.stringify(modalCapParticipantes.filter(p => (p.nombre||'').trim() || (p.cargo||'').trim()))) : [],
     fuerza_viento: esInc ? getIf('f_fuerza_viento') : '',
     estado_mar: esInc ? getIf('f_estado_mar') : '',
     fuente_luz: esInc ? getIf('f_fuente_luz') : '',
@@ -2792,17 +2895,24 @@ async function composeRecordBody(id){
     {l:'Instalación / Área', v:(r.instalacion||'—')+(r.area?' · '+r.area:'')},
     {l:'Fecha '+tipoDescriptor(r.tipo), v:fmtDate(r.fecha)},
   ];
-  if(TIPOS_CON_SEVERIDAD.includes(r.tipo)) metaCells.push({l:'Severidad', v:r.severidad||'—'});
-  else if(r.tipo==='SUG'){
-    metaCells.push({l:'¿Se llevará a cabo?', v:r.sug_realiza||'—'});
-    metaCells.push({l:'Área responsable', v:r.sug_area||'—'});
+  if(r.tipo==='CAP'){
+    metaCells.push({l:'Reportado por', v:r.reportado_por||'—'});
+    metaCells.push({l:'Instructor', v:(r.cap_instructor_nombre||'—')+(r.cap_instructor_cargo?' · '+r.cap_instructor_cargo:'')});
+    metaCells.push({l:'Duración', v:r.cap_duracion||'—'});
+    metaCells.push({l:'Parte del plan anual', v:r.cap_plan_anual||'—'});
+  } else {
+    if(TIPOS_CON_SEVERIDAD.includes(r.tipo)) metaCells.push({l:'Severidad', v:r.severidad||'—'});
+    else if(r.tipo==='SUG'){
+      metaCells.push({l:'¿Se llevará a cabo?', v:r.sug_realiza||'—'});
+      metaCells.push({l:'Área responsable', v:r.sug_area||'—'});
+    }
+    metaCells.push({l:'Estado actual', v:r.estado||'—'});
+    metaCells.push({l:'Responsable', v:resumenMeta.responsable});
+    metaCells.push({l:'Reportado por', v:r.reportado_por||'—'});
+    metaCells.push({l:'Fecha de vencimiento', v:(resumenMeta.vencimiento?fmtDate(resumenMeta.vencimiento):'—')+(isOverdue(r)?' ⚠ VENCIDA':'')});
+    metaCells.push({l:'Fecha de cierre', v:fmtDate(r.fecha_cierre)});
+    if(r.tipo!=='SUG') metaCells.push({l:'Referencia normativa', v:r.referencia_normativa||'—'});
   }
-  metaCells.push({l:'Estado actual', v:r.estado||'—'});
-  metaCells.push({l:'Responsable', v:resumenMeta.responsable});
-  metaCells.push({l:'Reportado por', v:r.reportado_por||'—'});
-  metaCells.push({l:'Fecha de vencimiento', v:(resumenMeta.vencimiento?fmtDate(resumenMeta.vencimiento):'—')+(isOverdue(r)?' ⚠ VENCIDA':'')});
-  metaCells.push({l:'Fecha de cierre', v:fmtDate(r.fecha_cierre)});
-  if(r.tipo!=='SUG') metaCells.push({l:'Referencia normativa', v:r.referencia_normativa||'—'});
   let metaTableHtml = '<table style="width:100%;border-collapse:collapse;margin-bottom:14px;">';
   for(let i=0;i<metaCells.length;i+=2){ metaTableHtml += metaRow(metaCells[i], metaCells[i+1] || {l:'',v:''}); }
   metaTableHtml += '</table>';
@@ -2862,6 +2972,22 @@ async function composeRecordBody(id){
     if(r.sug_observacion){
       body += secH3('Observación del seguimiento');
       body += `<p style="font-size:10.5pt;line-height:1.5;">${r.sug_observacion}</p>`;
+    }
+  }
+
+  if(r.tipo==='CAP'){
+    body += secH3('Evaluación de la capacitación');
+    body += `<p style="font-size:10.5pt;margin:0 0 4px;"><b>¿Fue efectiva?:</b> ${r.cap_efectiva||'—'} &nbsp;·&nbsp; <b>¿Evaluación / actividad posterior?:</b> ${r.cap_evaluacion||'—'}</p>`;
+    if(r.cap_evaluacion_detalle) body += `<p style="font-size:10.5pt;line-height:1.5;">${r.cap_evaluacion_detalle}</p>`;
+    const parts = Array.isArray(r.cap_participantes) ? r.cap_participantes : [];
+    body += secH3('Participantes');
+    if(parts.length){
+      body += `<table style="width:100%;border-collapse:collapse;margin-bottom:10px;font-size:10pt;">
+        <tr><th style="text-align:left;border:1px solid ${LINE};padding:5px 8px;background:#F2F5F8;">Nombre y apellido</th><th style="text-align:left;border:1px solid ${LINE};padding:5px 8px;background:#F2F5F8;">Cargo</th></tr>
+        ${parts.map(p=>`<tr><td style="border:1px solid ${LINE};padding:5px 8px;">${p.nombre||'—'}</td><td style="border:1px solid ${LINE};padding:5px 8px;">${p.cargo||'—'}</td></tr>`).join('')}
+      </table>`;
+    } else {
+      body += `<p style="font-size:10.5pt;">Sin participantes cargados.</p>`;
     }
   }
 
@@ -3107,7 +3233,7 @@ async function printRecordPDF(id){
 }
 
 /* ============ INIT ============ */
-Object.assign(window, { addAccion, addAttachmentFile, addAttachmentManual, addCatalogItem, addDotacionMes, addInvestigador, addLeccion, addVessel, addVisador, clearFilters, closeModal, deleteRecord, exportData, printRecordPDF, openAttachment, openCatalogManager, openRecordForm, openVisadoresManager, printChartsReport, printCompanyReport, removeAccion, removeAttachment, removeCatalogItem, removeDotacionMes, removeInvestigador, removeLeccion, removeVessel, removeVisador, renderAll, renderAuditNcKpi, renderOcimfKpi, renderScoreCard, setScoreCardYear, setScoreCardTarget, renderTable, saveRecord, setCompanyLogo, setSiteFilter, setClienteFilter, setTypeFilter, toggleCategoriaOtro, toggleTipificacionCausaOtro, toggleVisado, updateAccionField, updateInvestigadorField, updateVesselOptions, updateCargoField, addCargo, removeCargo, validateEstadoCierre, refreshData, logoutHsqe });
+Object.assign(window, { addAccion, addAttachmentFile, addAttachmentManual, addCatalogItem, addDotacionMes, addInvestigador, addLeccion, addCapParticipante, addVessel, addVisador, clearFilters, closeModal, deleteRecord, exportData, printRecordPDF, openAttachment, openCatalogManager, openRecordForm, openVisadoresManager, printChartsReport, printCompanyReport, removeAccion, removeAttachment, removeCatalogItem, removeDotacionMes, removeInvestigador, removeLeccion, removeCapParticipante, removeVessel, removeVisador, renderAll, renderAuditNcKpi, renderOcimfKpi, renderScoreCard, setScoreCardYear, setScoreCardTarget, renderTable, saveRecord, setCompanyLogo, setSiteFilter, setClienteFilter, setTypeFilter, toggleCategoriaOtro, toggleTipificacionCausaOtro, toggleVisado, updateAccionField, updateInvestigadorField, updateCapParticipanteField, updateVesselOptions, updateCargoField, addCargo, removeCargo, validateEstadoCierre, refreshData, logoutHsqe });
 
 async function logoutHsqe(){
   await supabase.auth.signOut();
