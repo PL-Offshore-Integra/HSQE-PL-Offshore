@@ -454,6 +454,19 @@ function generateRecordId(tipo, fechaStr){
   const num = String(count + 1).padStart(3,'0');
   return `${tipo}-${num}-${year}`;
 }
+// Código MOSTRADO: se numera por orden de fecha dentro del mismo tipo y año (001 = el más antiguo).
+// El id interno del registro no cambia; esto solo afecta lo que se ve en tabla y PDF.
+function codigoMostrado(r){
+  if(!r) return '';
+  if(!r.fecha) return r.id;
+  const year = new Date(r.fecha+'T00:00:00').getFullYear();
+  const mismos = DATA.records
+    .filter(x => x.tipo === r.tipo && x.fecha && new Date(x.fecha+'T00:00:00').getFullYear() === year)
+    .sort((a,b) => (a.fecha||'').localeCompare(b.fecha||'') || (a.id||'').localeCompare(b.id||''));
+  const pos = mismos.findIndex(x => x.id === r.id);
+  const num = String((pos < 0 ? mismos.length : pos) + 1).padStart(3,'0');
+  return `${r.tipo}-${num}-${year}`;
+}
 function todayISO(){ return new Date().toISOString().slice(0,10); }
 function fmtDate(d){ if(!d) return '—'; const p=d.split('-'); return p.length===3? `${p[2]}/${p[1]}/${p[0]}` : d; }
 function isOverdue(r){
@@ -1191,7 +1204,7 @@ function renderTable(){
     const resumen = accionesResumen(r);
     const sevCell = mostrarSeveridad ? `<td>${r.severidad ? `<span class="sev-tag" style="color:${SEV_COLORS[r.severidad]};background:${SEV_BG[r.severidad]}">${r.severidad}</span>` : '<span style="color:var(--graphite-light)">—</span>'}</td>` : '';
     return `<tr onclick="openRecordForm('${r.id}')">
-      <td><span class="id-tag">${r.id}</span></td>
+      <td><span class="id-tag">${codigoMostrado(r)}</span></td>
       <td><span class="type-tag" style="background:${TYPES[r.tipo].color}20;color:${TYPES[r.tipo].color}">${TYPES[r.tipo].label}</span></td>
       <td>${r.instalacion||'—'}</td>
       <td class="mono" style="font-size:12px;white-space:nowrap;">${fmtDate(r.fecha)}</td>
@@ -1310,7 +1323,7 @@ function openRecordForm(id){
   overlay.innerHTML = `
     <div class="modal">
       <div class="modal-head">
-        <h2>${r? 'Editar registro '+r.id : 'Nuevo registro'}</h2>
+        <h2>${r? 'Editar registro '+codigoMostrado(r) : 'Nuevo registro'}</h2>
         <button class="modal-close" onclick="closeModal()">✕</button>
       </div>
       <div class="modal-body">
@@ -2860,7 +2873,7 @@ function printCompanyReport(){
       sorted.forEach(r=>{
         const resumen = accionesResumen(r);
         html += `<tr>
-          <td>${r.id}</td>
+          <td>${codigoMostrado(r)}</td>
           <td>${TYPES[r.tipo]?TYPES[r.tipo].label:r.tipo}</td>
           <td>${fmtDate(r.fecha)}</td>
           <td>${(r.descripcion||'').slice(0,90)}</td>
@@ -2979,7 +2992,7 @@ async function composeRecordBody(id){
     <p style="margin:0 0 10px;">
       <span style="background:${tipoInfo.color};color:#fff;font-weight:bold;padding:3px 12px;border-radius:3px;font-size:10pt;">${tipoInfo.label}</span>
       <span style="font-style:italic;color:${GRAPH};font-size:9pt;">${EN[tipoInfo.label]||''}</span>
-      &nbsp;&nbsp;<span style="font-family:'Courier New',monospace;font-size:10.5pt;color:${GRAPH};">${r.id}</span>
+      &nbsp;&nbsp;<span style="font-family:'Courier New',monospace;font-size:10.5pt;color:${GRAPH};">${codigoMostrado(r)}</span>
     </p>
     ${r.titulo ? `<div style="font-family:Arial;font-size:15pt;font-weight:bold;color:${NAVY};margin:0 0 12px;">${r.titulo}</div>` : ''}
 
@@ -3241,7 +3254,7 @@ async function printRecordPDF(id){
     }
 
     // 4) Nombre por defecto = código del reporte + instalación (ej: "ACC-001-2026 Atlantic Dama")
-    const nombreArchivo = `${r.id}${r.instalacion ? ' ' + r.instalacion : ''}`.trim();
+    const nombreArchivo = `${codigoMostrado(r)}${r.instalacion ? ' ' + r.instalacion : ''}`.trim();
     outDoc.setTitle(nombreArchivo);      // el navegador lo usa como nombre por defecto al guardar
     outDoc.setSubject('Reporte HSQE - Integra');
 
