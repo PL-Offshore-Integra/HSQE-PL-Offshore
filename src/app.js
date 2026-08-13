@@ -1227,6 +1227,25 @@ function renderTable(){
     </table>`;
 }
 
+// Barra superior (estilo portal): usuario, iniciales y búsqueda
+function renderTopbar(){
+  const email = CURRENT_USER || '';
+  const userEl = document.getElementById('topbarUser');
+  const avEl = document.getElementById('topbarAvatar');
+  if(userEl) userEl.textContent = email;
+  if(avEl){
+    const base = (email.split('@')[0] || '').replace(/[._-]/g,' ').trim();
+    const parts = base.split(' ').filter(Boolean);
+    const ini = (parts.length >= 2 ? (parts[0][0] + parts[1][0]) : base.slice(0,2)).toUpperCase();
+    avEl.textContent = ini || '—';
+  }
+}
+function topbarSearch(v){
+  const sb = document.getElementById('searchBox');
+  if(sb) sb.value = v;
+  renderTable();
+}
+
 function renderBrandLogo(){
   const el = document.getElementById('brandLogo');
   if(!el) return;
@@ -1263,6 +1282,7 @@ function setKpiViewMode(kpiMode){
 
 function renderAll(){
   renderBrandLogo();
+  renderTopbar();
   renderSiteSelect();
   renderClienteSelect();
   renderTypeNav();
@@ -3294,7 +3314,7 @@ async function printRecordPDF(id){
 }
 
 /* ============ INIT ============ */
-Object.assign(window, { addAccion, addAttachmentFile, addAttachmentManual, addCatalogItem, addDotacionMes, addInvestigador, addLeccion, addCapParticipante, addVessel, addVisador, clearFilters, closeModal, deleteRecord, exportData, printRecordPDF, openAttachment, openCatalogManager, openRecordForm, openVisadoresManager, printChartsReport, printCompanyReport, removeAccion, removeAttachment, removeCatalogItem, removeDotacionMes, removeInvestigador, removeLeccion, removeCapParticipante, removeVessel, removeVisador, renderAll, renderAuditNcKpi, renderOcimfKpi, renderScoreCard, setScoreCardYear, setScoreCardTarget, renderTable, saveRecord, setCompanyLogo, setSiteFilter, setClienteFilter, setTypeFilter, toggleCategoriaOtro, toggleTipificacionCausaOtro, toggleVisado, updateAccionField, updateInvestigadorField, updateCapParticipanteField, updateVesselOptions, updateCargoField, addCargo, removeCargo, validateEstadoCierre, refreshData, logoutHsqe });
+Object.assign(window, { addAccion, addAttachmentFile, addAttachmentManual, addCatalogItem, addDotacionMes, addInvestigador, addLeccion, addCapParticipante, addVessel, addVisador, clearFilters, closeModal, deleteRecord, exportData, printRecordPDF, openAttachment, openCatalogManager, openRecordForm, openVisadoresManager, printChartsReport, printCompanyReport, removeAccion, removeAttachment, removeCatalogItem, removeDotacionMes, removeInvestigador, removeLeccion, removeCapParticipante, removeVessel, removeVisador, renderAll, renderTopbar, topbarSearch, renderAuditNcKpi, renderOcimfKpi, renderScoreCard, setScoreCardYear, setScoreCardTarget, renderTable, saveRecord, setCompanyLogo, setSiteFilter, setClienteFilter, setTypeFilter, toggleCategoriaOtro, toggleTipificacionCausaOtro, toggleVisado, updateAccionField, updateInvestigadorField, updateCapParticipanteField, updateVesselOptions, updateCargoField, addCargo, removeCargo, validateEstadoCierre, refreshData, logoutHsqe });
 
 async function logoutHsqe(){
   await supabase.auth.signOut();
