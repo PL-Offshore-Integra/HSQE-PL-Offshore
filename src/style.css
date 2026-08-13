@@ -36,6 +36,8 @@
   .topbar-user{font-size:13px;color:#fff;}
   .topbar-link{font-size:13px;color:#fff;font-weight:600;text-decoration:none;}
   .topbar-link:hover{text-decoration:underline;}
+  .topbar-logout{background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);color:#fff;font-family:'IBM Plex Sans';font-size:13px;font-weight:600;padding:6px 12px;border-radius:6px;cursor:pointer;width:auto;white-space:nowrap;}
+  .topbar-logout:hover{background:rgba(255,255,255,0.2);}
   .app-body{display:flex;flex:1;min-height:0;}
 
   /* SIDEBAR */
