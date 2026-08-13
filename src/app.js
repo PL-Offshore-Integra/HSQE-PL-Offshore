@@ -17,7 +17,7 @@ const TYPES = {
   CI:  {label:'Condición Insegura',  color:'#B07D0A'},
   SUG: {label:'Sugerencia de Mejora', color:'#0E7C86'},
   CAP: {label:'Capacitación',        color:'#7A4FA0'},
-  AUD: {label:'Auditoría',           color:'#3E6B8C'},
+  AUD: {label:'Auditoría / Inspección', color:'#3E6B8C'},
 };
 // Frase para personalizar etiquetas por tipo: "Fecha del incidente", "Título de la sugerencia de mejora", etc.
 const TIPO_DESCRIPTOR = {
@@ -46,6 +46,7 @@ const EN = {
   'Capacitación':'Training',
   'Auditoría':'Audit','Datos de la auditoría':'Audit data','Tipo de auditoría':'Audit type',
   'Auditor':'Auditor','Hallazgos':'Findings','Tipo':'Type','Fecha de la auditoría':'Audit date',
+  'Interna / Externa':'Internal / External','Norma / Tipo':'Standard / Type','Responsable':'Responsible',
   'Descripción de la auditoría':'Audit Description',
   'Datos de la capacitación':'Training data','Evaluación de la capacitación':'Training evaluation',
   'Participantes':'Participants','Instructor':'Instructor','Duración':'Duration',
@@ -589,7 +590,7 @@ function renderTypeNav(){
   const label = (t, mt) => `<div class="nav-label" style="margin-top:${mt||0}px;">${t}</div>`;
   let html = label('Categorías');
   html += navItem('ALL', 'Todos los registros', navDotColor('ALL'), filtered.length);
-  html += label('Auditorías', 12) + group(NAV_GROUP_AUDITORIAS);
+  html += label('Auditorías / Inspecciones', 12) + group(NAV_GROUP_AUDITORIAS);
   html += label('Hallazgos', 12) + group(NAV_GROUP_HALLAZGOS);
   html += label('Reporte de Eventos', 12) + group(NAV_GROUP_EVENTOS);
   html += label('Reportes Proactivos', 12) + group(NAV_ORDER_PROACTIVOS);
@@ -1682,14 +1683,17 @@ function openRecordForm(id){
         </div>
 
         <div id="block_aud">
-          <div class="section-title">Datos de la auditoría</div>
+          <div class="section-title">Datos de la auditoría / inspección</div>
           <div class="field-row">
-            <div class="field"><label>Tipo de auditoría</label>
-              <select id="f_aud_tipo">${['','Auditoría Interna','Auditoría Externa','PSC (Port State Control)','SIRE','eCMID','Vetting','Otra'].map(o=>`<option value="${o}" ${r&&r.aud_tipo===o?'selected':''}>${o||'Seleccionar...'}</option>`).join('')}</select>
+            <div class="field"><label>Interna / Externa</label>
+              <select id="f_aud_alcance">${['','Interna','Externa'].map(o=>`<option value="${o}" ${r&&r.aud_alcance===o?'selected':''}>${o||'Seleccionar...'}</option>`).join('')}</select>
             </div>
-            <div class="field"><label>Auditor</label>
-              <input type="text" id="f_aud_auditor" value="${r?(r.aud_auditor||'').replace(/"/g,'&quot;'):''}" placeholder="Nombre del auditor">
+            <div class="field"><label>Norma / Tipo</label>
+              <select id="f_aud_norma">${['','ISM','ISO','PSC','Inspección Extraordinaria','Otra'].map(o=>`<option value="${o}" ${r&&r.aud_norma===o?'selected':''}>${o||'Seleccionar...'}</option>`).join('')}</select>
             </div>
+          </div>
+          <div class="field"><label>Auditor</label>
+            <input type="text" id="f_aud_auditor" value="${r?(r.aud_auditor||'').replace(/"/g,'&quot;'):''}" placeholder="Nombre del auditor">
           </div>
           <div class="section-title with-btn" style="margin-top:8px;">
             <span style="font-size:12.5px;">Hallazgos</span>
@@ -1817,7 +1821,7 @@ function hallazgosFromRecord(r){
   return [];
 }
 function addHallazgo(){
-  modalHallazgos.push({ tipo:'OBS', descripcion:'', rec_id:null });
+  modalHallazgos.push({ tipo:'OBS', descripcion:'', responsable:'', rec_id:null });
   renderHallazgosList();
 }
 function removeHallazgo(i){
@@ -1832,14 +1836,19 @@ function renderHallazgosList(){
   if(!wrap) return;
   if(modalHallazgos.length===0){ wrap.innerHTML = '<span style="font-size:12px;color:var(--graphite-light)">Sin hallazgos cargados. Cada hallazgo crea automáticamente su registro para seguirlo.</span>'; return; }
   wrap.innerHTML = modalHallazgos.map((h,i)=>`
-    <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:8px;">
-      <div class="field" style="flex:0 0 170px;margin-bottom:0;"><label style="font-size:11px;">Tipo de hallazgo</label>
-        <select onchange="updateHallazgoField(${i},'tipo',this.value)">${HALLAZGO_TIPOS.map(([v,l])=>`<option value="${v}" ${h.tipo===v?'selected':''}>${l}</option>`).join('')}</select>
+    <div style="border:1px solid var(--line);border-radius:var(--radius);padding:10px 12px;margin-bottom:8px;background:#F7F9FB;">
+      <div style="display:flex;gap:10px;align-items:flex-end;">
+        <div class="field" style="flex:0 0 170px;margin-bottom:0;"><label style="font-size:11px;">Tipo de hallazgo</label>
+          <select onchange="updateHallazgoField(${i},'tipo',this.value)">${HALLAZGO_TIPOS.map(([v,l])=>`<option value="${v}" ${h.tipo===v?'selected':''}>${l}</option>`).join('')}</select>
+        </div>
+        <div class="field" style="flex:1;margin-bottom:0;"><label style="font-size:11px;">Responsable ${h.rec_id?`<span class="mono" style="color:var(--graphite-light);font-size:10px;font-weight:400;">(registro ${h.rec_id})</span>`:''}</label>
+          <select onchange="updateHallazgoField(${i},'responsable',this.value)">${cargoOptionsHtml(h.responsable)}</select>
+        </div>
+        <button class="btn secondary" style="padding:8px 12px;color:var(--red);flex:0 0 auto;" onclick="removeHallazgo(${i})">✕</button>
       </div>
-      <div class="field" style="flex:1;margin-bottom:0;"><label style="font-size:11px;">Descripción del hallazgo ${h.rec_id?`<span class="mono" style="color:var(--graphite-light);font-size:10px;font-weight:400;">(registro ${h.rec_id})</span>`:''}</label>
+      <div class="field" style="margin:8px 0 0;"><label style="font-size:11px;">Descripción del hallazgo</label>
         <input type="text" value="${(h.descripcion||'').replace(/"/g,'&quot;')}" placeholder="Descripción del hallazgo" oninput="updateHallazgoField(${i},'descripcion',this.value)">
       </div>
-      <button class="btn secondary" style="padding:8px 12px;color:var(--red);flex:0 0 auto;" onclick="removeHallazgo(${i})">✕</button>
     </div>`).join('');
 }
 
@@ -2039,7 +2048,7 @@ function toggleConditionalFields(){
   document.getElementById('block_investigadores').style.display = esInc ? 'block' : 'none';
   document.getElementById('block_condiciones_inc').style.display = esInc ? 'block' : 'none';
   document.getElementById('block_desc_inc').style.display = esInc ? 'block' : 'none';
-  document.getElementById('block_desc_simple').style.display = esInc ? 'none' : 'block';
+  document.getElementById('block_desc_simple').style.display = (esInc || esAud) ? 'none' : 'block';
   updateCategoriaOptions();
   document.getElementById('block_severidad').style.display = TIPOS_CON_SEVERIDAD.includes(tipo) ? 'block' : 'none';
   document.getElementById('block_lecciones').style.display = TIPOS_CON_LECCIONES.includes(tipo) ? 'block' : 'none';
@@ -2330,7 +2339,8 @@ async function saveRecord(){
     cap_evaluacion_detalle: esCap ? getIf('f_cap_evaluacion_detalle').trim() : '',
     cap_plan_anual: esCap ? getIf('f_cap_plan_anual') : '',
     cap_participantes: esCap ? JSON.parse(JSON.stringify(modalCapParticipantes.filter(p => (p.nombre||'').trim() || (p.cargo||'').trim()))) : [],
-    aud_tipo: esAud ? getIf('f_aud_tipo') : '',
+    aud_alcance: esAud ? getIf('f_aud_alcance') : '',
+    aud_norma: esAud ? getIf('f_aud_norma') : '',
     aud_auditor: esAud ? getIf('f_aud_auditor').trim() : '',
     hallazgos: esAud ? JSON.parse(JSON.stringify(modalHallazgos.filter(h => (h.descripcion||'').trim()))) : [],
     fuerza_viento: esInc ? getIf('f_fuerza_viento') : '',
@@ -2435,7 +2445,7 @@ function manageHallazgosAuditoria(rec){
     if(!tipoH || !desc) return;
     if(item.rec_id){
       const hijo = DATA.records.find(x => x.id === item.rec_id && x.tipo === tipoH);
-      if(hijo){ hijo.descripcion = desc; return; } // ya existe y coincide el tipo: solo actualiza
+      if(hijo){ hijo.descripcion = desc; hijo.responsable = item.responsable || ''; return; } // ya existe y coincide el tipo: actualiza
     }
     const hijo = {
       id: generateRecordId(tipoH, rec.fecha),
@@ -2452,7 +2462,7 @@ function manageHallazgosAuditoria(rec){
       severidad: '',
       estado: 'Abierto',
       comunicar_a: '', medio_comunicacion: '', plazo_comunicacion: '',
-      responsable: '', fecha_vencimiento: '', fecha_cierre: '',
+      responsable: item.responsable || '', fecha_vencimiento: '', fecha_cierre: '',
       referencia_normativa: `Generada automáticamente desde ${rec.id}`,
       acciones_correctivas: [], acciones_preventivas: [],
       adjuntos: [], lecciones_aprendidas: [],
@@ -3100,7 +3110,8 @@ async function composeRecordBody(id){
     metaCells.push({l:'Duración', v:r.cap_duracion||'—'});
     metaCells.push({l:'Parte del plan anual', v:r.cap_plan_anual||'—'});
   } else if(r.tipo==='AUD'){
-    metaCells.push({l:'Tipo de auditoría', v:r.aud_tipo||'—'});
+    metaCells.push({l:'Interna / Externa', v:r.aud_alcance||'—'});
+    metaCells.push({l:'Norma / Tipo', v:r.aud_norma||'—'});
     metaCells.push({l:'Auditor', v:r.aud_auditor||'—'});
     metaCells.push({l:'Estado actual', v:r.estado||'—'});
   } else {
@@ -3207,8 +3218,8 @@ async function composeRecordBody(id){
     body += secH3('Hallazgos');
     if(halls.length){
       body += `<table style="width:100%;border-collapse:collapse;margin-bottom:10px;font-size:10pt;">
-        <tr><th style="text-align:left;border:1px solid ${LINE};padding:5px 8px;background:#F2F5F8;width:20%;">${bilingual('Tipo')}</th><th style="text-align:left;border:1px solid ${LINE};padding:5px 8px;background:#F2F5F8;width:60%;">Descripción <span style="font-style:italic;color:#9AA6B2;font-weight:400;">· Description</span></th><th style="text-align:left;border:1px solid ${LINE};padding:5px 8px;background:#F2F5F8;width:20%;">Registro <span style="font-style:italic;color:#9AA6B2;font-weight:400;">· Record</span></th></tr>
-        ${halls.map(h=>`<tr><td style="border:1px solid ${LINE};padding:6px 8px;">${nombreTipoH[h.tipo]||h.tipo||'—'}</td><td style="border:1px solid ${LINE};padding:6px 8px;">${h.descripcion||'—'}</td><td style="border:1px solid ${LINE};padding:6px 8px;font-family:'IBM Plex Mono',monospace;font-size:9pt;">${h.rec_id||'—'}</td></tr>`).join('')}
+        <tr><th style="text-align:left;border:1px solid ${LINE};padding:5px 8px;background:#F2F5F8;width:16%;">${bilingual('Tipo')}</th><th style="text-align:left;border:1px solid ${LINE};padding:5px 8px;background:#F2F5F8;width:44%;">Descripción <span style="font-style:italic;color:#9AA6B2;font-weight:400;">· Description</span></th><th style="text-align:left;border:1px solid ${LINE};padding:5px 8px;background:#F2F5F8;width:22%;">${bilingual('Responsable')}</th><th style="text-align:left;border:1px solid ${LINE};padding:5px 8px;background:#F2F5F8;width:18%;">Registro <span style="font-style:italic;color:#9AA6B2;font-weight:400;">· Record</span></th></tr>
+        ${halls.map(h=>`<tr><td style="border:1px solid ${LINE};padding:6px 8px;">${nombreTipoH[h.tipo]||h.tipo||'—'}</td><td style="border:1px solid ${LINE};padding:6px 8px;">${h.descripcion||'—'}</td><td style="border:1px solid ${LINE};padding:6px 8px;">${h.responsable||'—'}</td><td style="border:1px solid ${LINE};padding:6px 8px;font-family:'IBM Plex Mono',monospace;font-size:9pt;">${h.rec_id||'—'}</td></tr>`).join('')}
       </table>`;
     } else {
       body += `<p style="font-size:10.5pt;">Sin hallazgos cargados.</p>`;
