@@ -122,7 +122,7 @@ const CLASIF_OCIMF = ['','LTI - Lesión con Tiempo Perdido','MTI - Lesión con T
 // Tipos que llevan Clasificación OCIMF/TMSA (solo Accidente e Incidente)
 const DEFAULT_LOGOS = {
   cleansea: "/cleansea.png",
-  ploffshore: "/PL_Offshore_Fondo_Blanco.png", // versión color/navy — para fondos claros (PDF)
+  ploffshore: "/ploffshore-azul.png", // versión azul — para fondos claros (sidebar blanco y PDF)
 };
 // Versión BLANCA del logo, para fondos oscuros (barra lateral azul)
 const DEFAULT_LOGOS_WHITE = {
@@ -565,7 +565,7 @@ const NAV_GROUP_CAPACITACION = ['CAP'];
 const NAV_ORDER_ALL_TYPES = [...NAV_GROUP_HALLAZGOS, ...NAV_GROUP_EVENTOS, ...NAV_ORDER_PROACTIVOS, ...NAV_GROUP_CAPACITACION];
 // Color del punto/bullet en el menú (independiente del color del tipo en tablas/gráficos)
 const NAV_DOT_COLORS = {
-  ALL:'#FFFFFF',
+  ALL:'#002247',
   NC:'#E67E22', OBS:'#E67E22', OM:'#E67E22',            // naranja
   INC:'#C0392B', ACC:'#C0392B', CUA:'#C0392B', LA:'#C0392B', // rojo
   AI:'#8FC1E8', CI:'#8FC1E8', SUG:'#8FC1E8',            // celeste claro
@@ -1232,14 +1232,9 @@ function renderBrandLogo(){
   if(!el) return;
   const co = DATA.companies[0];
   if(!co){ el.innerHTML = ''; return; }
-  // En la barra lateral (fondo azul) se usa la versión blanca del logo, sin caja.
-  const white = guessWhiteLogo(co.name);
-  if(white){
-    el.innerHTML = `<img src="${white}" style="display:block;max-height:52px;max-width:190px;margin-bottom:12px;">`;
-    return;
-  }
+  // Barra lateral ahora es blanca (estilo portal): se usa el logo azul, sin caja.
   const logo = getCompanyLogo(co.id);
-  el.innerHTML = logo ? `<div class="brand-logo-box"><img src="${logo}"></div>` : '';
+  el.innerHTML = logo ? `<img src="${logo}" style="display:block;max-height:48px;max-width:190px;margin-bottom:10px;">` : '';
 }
 // Alterna entre el panel normal (KPIs, graficos, tabla) y la vista dedicada "KPI HSQE".
 // El encabezado con el boton de impresion queda SIEMPRE visible; solo cambian sus textos.
