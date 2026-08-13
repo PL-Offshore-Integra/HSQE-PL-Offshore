@@ -943,7 +943,7 @@ function renderScoreCard(){
   panel.innerHTML = `
     <div class="chart-card" style="padding:0;overflow:hidden;">
       <div style="display:flex;justify-content:space-between;align-items:center;background:#002247;color:#fff;padding:10px 14px;">
-        <div style="font-family:'Saira',sans-serif;font-weight:700;letter-spacing:0.06em;font-size:16px;">SCORE CARD</div>
+        <div style="font-family:'IBM Plex Sans',sans-serif;font-weight:700;letter-spacing:0.06em;font-size:16px;">SCORE CARD</div>
         <div style="display:flex;align-items:center;gap:8px;font-size:12px;">
           <span style="opacity:.85;">Año</span>
           <select onchange="setScoreCardYear(this.value)" style="width:auto;background:#0A3A66;color:#fff;border:1px solid rgba(255,255,255,0.25);padding:4px 8px;">${yearOpts.join('')}</select>
@@ -2695,7 +2695,7 @@ async function printChartsReport(){
   const scopeLabel = kpiMode ? 'KPI HSQE' : document.getElementById('chartsSectionLabel').textContent;
   const scoreEl = document.getElementById('scoreCardTable');
   const scoreHtml = (kpiMode && scoreEl)
-    ? `<div style="margin-top:18px;"><h3 style="font-family:'Saira';font-size:16px;color:#002247;border-bottom:2px solid #0A3A66;padding-bottom:4px;">Score Card</h3>${scoreEl.outerHTML}</div>`
+    ? `<div style="margin-top:18px;"><h3 style="font-family:'IBM Plex Sans';font-size:16px;color:#002247;border-bottom:2px solid #0A3A66;padding-bottom:4px;">Score Card</h3>${scoreEl.outerHTML}</div>`
     : '';
 
   // KPIs: se clona tal cual se ve en pantalla
@@ -2710,7 +2710,7 @@ async function printChartsReport(){
     const ocimfInfoHtml = document.getElementById('ocimfExposureInfo').innerHTML;
     ocimfHtml = `
       <div style="margin:4px 0 18px;">
-        <h3 style="font-family:'Saira';font-size:16px;color:#002247;border-bottom:2px solid #0A3A66;padding-bottom:4px;">KPI OCIMF — Frecuencia de Lesiones (${fmtDate(desde)} a ${fmtDate(hasta)})</h3>
+        <h3 style="font-family:'IBM Plex Sans';font-size:16px;color:#002247;border-bottom:2px solid #0A3A66;padding-bottom:4px;">KPI OCIMF — Frecuencia de Lesiones (${fmtDate(desde)} a ${fmtDate(hasta)})</h3>
         ${ocimfCardsHtml}
         <div style="font-size:11px;color:#5B6671;margin-top:6px;line-height:1.5;">${ocimfInfoHtml}</div>
       </div>`;
@@ -2725,7 +2725,7 @@ async function printChartsReport(){
     const auditNcInfoHtml = document.getElementById('auditNcInfo').innerHTML;
     auditNcHtml = `
       <div style="margin:4px 0 18px;">
-        <h3 style="font-family:'Saira';font-size:16px;color:#002247;border-bottom:2px solid #0A3A66;padding-bottom:4px;">KPI — No Conformidades en Auditorías ISM / ISO (${fmtDate(auditDesde)} a ${fmtDate(auditHasta)})</h3>
+        <h3 style="font-family:'IBM Plex Sans';font-size:16px;color:#002247;border-bottom:2px solid #0A3A66;padding-bottom:4px;">KPI — No Conformidades en Auditorías ISM / ISO (${fmtDate(auditDesde)} a ${fmtDate(auditHasta)})</h3>
         ${auditNcCardsHtml}
         <div style="font-size:11px;color:#5B6671;margin-top:6px;line-height:1.5;">${auditNcInfoHtml}</div>
       </div>`;
@@ -2776,7 +2776,7 @@ async function printChartsReport(){
       </tr>
     </table>
     ${currentClienteFilter!=='ALL' ? `<div style="background:#EAF1F8;border-left:4px solid #002247;padding:9px 14px;margin-bottom:14px;">
-      <div style="font-family:'Saira';font-size:15px;font-weight:700;color:#002247;letter-spacing:0.02em;">${currentClienteFilter==='No Asignado a Cliente' ? 'Registros sin cliente / operación asignado' : 'Registros durante la operación: '+currentClienteFilter}
+      <div style="font-family:'IBM Plex Sans';font-size:15px;font-weight:700;color:#002247;letter-spacing:0.02em;">${currentClienteFilter==='No Asignado a Cliente' ? 'Registros sin cliente / operación asignado' : 'Registros durante la operación: '+currentClienteFilter}
         <span style="font-style:italic;font-weight:400;color:#9AA6B2;font-size:12px;">· ${currentClienteFilter==='No Asignado a Cliente' ? 'Records with no client / operation assigned' : 'Records for operation: '+currentClienteFilter}</span></div>
     </div>` : ''}
     ${kpiHtmlBil}
@@ -2785,7 +2785,7 @@ async function printChartsReport(){
     ${auditNcHtml}
     ${scoreHtml}
     ${kpiMode ? '' : `<div class="pr-registros">
-      <h3 style="font-family:'Saira';font-size:16px;color:#002247;border-bottom:2px solid #0A3A66;padding-bottom:4px;">${bilingual(`Registros incluidos`)}</h3>
+      <h3 style="font-family:'IBM Plex Sans';font-size:16px;color:#002247;border-bottom:2px solid #0A3A66;padding-bottom:4px;">${bilingual(`Registros incluidos`)}</h3>
       ${tableHtml}
     </div>`}
   </div>`;
@@ -2843,7 +2843,7 @@ function printCompanyReport(){
     const cerradas = recs.filter(r => esCerrado(r.estado));
 
     html += `<div class="pr-company">
-      <div style="font-family:'DM Mono';font-size:10px;color:var(--graphite-light);margin-bottom:4px;">INTEGRA · Módulo HSQE — Generado el ${fechaHora}</div>
+      <div style="font-family:'IBM Plex Mono';font-size:10px;color:var(--graphite-light);margin-bottom:4px;">INTEGRA · Módulo HSQE — Generado el ${fechaHora}</div>
       <h2>${sitio}</h2>
       <div class="pr-kpis">
         <div class="pr-kpi"><div class="n">${recs.length}</div><div class="l">Total registros</div></div>
@@ -2975,8 +2975,8 @@ async function composeRecordBody(id){
     <table style="width:100%;border-collapse:collapse;margin-bottom:14px;">
       <tr>
         <td style="width:70%;vertical-align:middle;border-bottom:3px solid ${NAVY};padding-bottom:8px;">
-          <div style="font-family:Arial,sans-serif;font-size:18pt;font-weight:bold;color:${NAVY};letter-spacing:1pt;">INTEGRA · MÓDULO HSQE</div>
-          <div style="font-size:8.5pt;color:${GRAPH};font-family:'Courier New',monospace;margin-top:2px;">Generado el ${fechaHora}</div>
+          <div style="font-family:'IBM Plex Sans',Arial,sans-serif;font-size:18pt;font-weight:bold;color:${NAVY};letter-spacing:1pt;">INTEGRA · MÓDULO HSQE</div>
+          <div style="font-size:8.5pt;color:${GRAPH};font-family:'IBM Plex Mono',monospace;margin-top:2px;">Generado el ${fechaHora}</div>
         </td>
         <td style="width:30%;text-align:right;vertical-align:middle;border-bottom:3px solid ${NAVY};padding-bottom:8px;">
           ${logo ? `<img src="${logo}" style="max-height:60px;max-width:160px;">` : ''}
@@ -2987,15 +2987,15 @@ async function composeRecordBody(id){
     <p style="margin:0 0 10px;">
       <span style="background:${tipoInfo.color};color:#fff;font-weight:bold;padding:3px 12px;border-radius:3px;font-size:10pt;">${tipoInfo.label}</span>
       <span style="font-style:italic;color:${GRAPH};font-size:9pt;">${EN[tipoInfo.label]||''}</span>
-      &nbsp;&nbsp;<span style="font-family:'Courier New',monospace;font-size:10.5pt;color:${GRAPH};">${codigoMostrado(r)}</span>
+      &nbsp;&nbsp;<span style="font-family:'IBM Plex Mono',monospace;font-size:10.5pt;color:${GRAPH};">${codigoMostrado(r)}</span>
     </p>
-    ${r.titulo ? `<div style="font-family:Arial;font-size:15pt;font-weight:bold;color:${NAVY};margin:0 0 12px;">${r.titulo}</div>` : ''}
+    ${r.titulo ? `<div style="font-family:'IBM Plex Sans',Arial;font-size:15pt;font-weight:bold;color:${NAVY};margin:0 0 12px;">${r.titulo}</div>` : ''}
 
     ${metaTableHtml}
 
     `;
 
-  const secH3 = t => `<h3 style="font-family:Arial;font-size:12pt;color:${NAVY};border-bottom:2px solid ${ORANGE};padding-bottom:3px;">${bilingual(`${t}`)}</h3>`;
+  const secH3 = t => `<h3 style="font-family:'IBM Plex Sans',Arial;font-size:12pt;color:${NAVY};border-bottom:2px solid ${ORANGE};padding-bottom:3px;">${bilingual(`${t}`)}</h3>`;
   if(r.tipo==='INC'){
     // Investigadores
     if(r.investigador_lider || (Array.isArray(r.investigadores) && r.investigadores.length)){
@@ -3053,15 +3053,15 @@ async function composeRecordBody(id){
   }
 
   if(TIPOS_CON_OCIMF.includes(r.tipo) && r.clasificacion){
-    body += `<h3 style="font-family:Arial;font-size:12pt;color:${NAVY};border-bottom:2px solid ${ORANGE};padding-bottom:3px;">${bilingual(`Clasificación OCIMF/TMSA`)}</h3><p style="font-size:10.5pt;">${r.clasificacion}${r.incluir_kpi?' <i>(incluido en KPI OCIMF)</i>':''}</p>`;
+    body += `<h3 style="font-family:'IBM Plex Sans',Arial;font-size:12pt;color:${NAVY};border-bottom:2px solid ${ORANGE};padding-bottom:3px;">${bilingual(`Clasificación OCIMF/TMSA`)}</h3><p style="font-size:10.5pt;">${r.clasificacion}${r.incluir_kpi?' <i>(incluido en KPI OCIMF)</i>':''}</p>`;
   }
   if(r.tipo==='CUA' && (r.naturaleza_cuasi || r.dano_material_potencial)){
-    body += `<h3 style="font-family:Arial;font-size:12pt;color:${NAVY};border-bottom:2px solid ${ORANGE};padding-bottom:3px;">${bilingual(`Detalle del Cuasi Accidente`)}</h3>
+    body += `<h3 style="font-family:'IBM Plex Sans',Arial;font-size:12pt;color:${NAVY};border-bottom:2px solid ${ORANGE};padding-bottom:3px;">${bilingual(`Detalle del Cuasi Accidente`)}</h3>
       <p style="font-size:10.5pt;"><b>Naturaleza:</b> ${r.naturaleza_cuasi||'—'}</p>
       ${r.dano_material_potencial?`<p style="font-size:10.5pt;"><b>Daño material potencial:</b> ${r.dano_material_potencial}</p>`:''}`;
   }
   if(r.parte_cuerpo || r.tipo_lesion){
-    body += `<h3 style="font-family:Arial;font-size:12pt;color:${NAVY};border-bottom:2px solid ${ORANGE};padding-bottom:3px;">${bilingual(`Datos de la Lesión`)}</h3>
+    body += `<h3 style="font-family:'IBM Plex Sans',Arial;font-size:12pt;color:${NAVY};border-bottom:2px solid ${ORANGE};padding-bottom:3px;">${bilingual(`Datos de la Lesión`)}</h3>
       <p style="font-size:10.5pt;"><b>Parte del cuerpo afectada:</b> ${r.parte_cuerpo||'—'} &nbsp;·&nbsp; <b>Tipo de lesión:</b> ${r.tipo_lesion||'—'}</p>`;
   }
   const consideraciones = [
@@ -3073,7 +3073,7 @@ async function composeRecordBody(id){
     ['¿Se realizó asiento en el libro de navegación?', r.q_asiento_libro],
   ];
   if(consideraciones.some(c=>c[1])){
-    body += `<h3 style="font-family:Arial;font-size:12pt;color:${NAVY};border-bottom:2px solid ${ORANGE};padding-bottom:3px;">${bilingual(`Consideraciones del Evento`)}</h3>
+    body += `<h3 style="font-family:'IBM Plex Sans',Arial;font-size:12pt;color:${NAVY};border-bottom:2px solid ${ORANGE};padding-bottom:3px;">${bilingual(`Consideraciones del Evento`)}</h3>
       <table style="width:100%;border-collapse:collapse;font-size:10pt;margin-bottom:6px;">` +
       consideraciones.map(c=>`<tr>
         <td style="border:1px solid ${LINE};padding:5px 9px;">${c[0]}</td>
@@ -3082,17 +3082,17 @@ async function composeRecordBody(id){
   }
   if((r.tipo==='AI' || r.tipo==='CI' || r.tipo==='INC') && r.categoria_evento){
     const tituloCat = r.tipo === 'INC' ? 'Tipificación' : 'Categorización';
-    body += `<h3 style="font-family:Arial;font-size:12pt;color:${NAVY};border-bottom:2px solid ${ORANGE};padding-bottom:3px;">${bilingual(`${tituloCat}`)}</h3>
+    body += `<h3 style="font-family:'IBM Plex Sans',Arial;font-size:12pt;color:${NAVY};border-bottom:2px solid ${ORANGE};padding-bottom:3px;">${bilingual(`${tituloCat}`)}</h3>
       <p style="font-size:10.5pt;">${r.categoria_evento}${r.categoria_evento==='Otros' && r.categoria_otro_detalle ? ' — '+r.categoria_otro_detalle : ''}</p>`;
   }
   if(TIPOS_CON_CLASIF_ORIGEN.includes(r.tipo) && r.clasificacion_origen){
-    body += `<h3 style="font-family:Arial;font-size:12pt;color:${NAVY};border-bottom:2px solid ${ORANGE};padding-bottom:3px;">${bilingual(`Clasificación`)}</h3><p style="font-size:10.5pt;">${r.clasificacion_origen}</p>`;
+    body += `<h3 style="font-family:'IBM Plex Sans',Arial;font-size:12pt;color:${NAVY};border-bottom:2px solid ${ORANGE};padding-bottom:3px;">${bilingual(`Clasificación`)}</h3><p style="font-size:10.5pt;">${r.clasificacion_origen}</p>`;
     if(r.tipo === 'NC' && (r.tipo_auditoria || r.ambito_auditoria)){
       body += `<p style="font-size:10.5pt;"><b>Origen de auditoría:</b> ${r.tipo_auditoria||'—'} · ${r.ambito_auditoria||'—'}</p>`;
     }
   }
   if(!TIPOS_SIN_CAUSA_ACCION.includes(r.tipo) && (r.causa_raiz || r.tipificacion_causa || (r.acciones_correctivas||[]).length || (r.acciones_preventivas||[]).length)){
-    body += `<h3 style="font-family:Arial;font-size:12pt;color:${NAVY};border-bottom:2px solid ${ORANGE};padding-bottom:3px;">${bilingual(`Análisis y Acción`)}</h3>
+    body += `<h3 style="font-family:'IBM Plex Sans',Arial;font-size:12pt;color:${NAVY};border-bottom:2px solid ${ORANGE};padding-bottom:3px;">${bilingual(`Análisis y Acción`)}</h3>
       ${r.tipificacion_causa?`<p style="font-size:10.5pt;"><b>Tipificación de la causa raíz:</b> ${r.tipificacion_causa}${r.tipificacion_causa==='Otros' && r.tipificacion_causa_otro ? ' — '+r.tipificacion_causa_otro : ''}</p>`:''}
       ${r.causa_raiz?`<p style="font-size:10.5pt;"><b>Descripción de causas:</b> ${r.causa_raiz}</p>`:''}`;
     const accionRow = (titulo, lista) => {
@@ -3106,17 +3106,17 @@ async function composeRecordBody(id){
     body += accionRow('Acciones Preventivas', r.acciones_preventivas);
   }
   if(TIPOS_SIN_CAUSA_ACCION.includes(r.tipo) && (r.comunicar_a || r.medio_comunicacion || r.plazo_comunicacion)){
-    body += `<h3 style="font-family:Arial;font-size:12pt;color:${NAVY};border-bottom:2px solid ${ORANGE};padding-bottom:3px;">${bilingual(`Comunicación`)}</h3>
+    body += `<h3 style="font-family:'IBM Plex Sans',Arial;font-size:12pt;color:${NAVY};border-bottom:2px solid ${ORANGE};padding-bottom:3px;">${bilingual(`Comunicación`)}</h3>
       <p style="font-size:10.5pt;"><b>A quién comunicar:</b> ${r.comunicar_a||'—'}</p>
       <p style="font-size:10.5pt;"><b>Medio:</b> ${r.medio_comunicacion||'—'} &nbsp;·&nbsp; <b>Plazo:</b> ${r.plazo_comunicacion||'—'}</p>`;
   }
   if(Array.isArray(r.lecciones_aprendidas) && r.lecciones_aprendidas.length>0){
-    body += `<h3 style="font-family:Arial;font-size:12pt;color:${NAVY};border-bottom:2px solid ${ORANGE};padding-bottom:3px;">${bilingual(`Lecciones Aprendidas`)}</h3>` +
-      r.lecciones_aprendidas.map(l=>`<p style="font-size:10.5pt;">💡 ${l.texto}${l.la_id?` <span style="font-family:'Courier New',monospace;font-size:9pt;color:${GRAPH};">(${l.la_id})</span>`:''}</p>`).join('');
+    body += `<h3 style="font-family:'IBM Plex Sans',Arial;font-size:12pt;color:${NAVY};border-bottom:2px solid ${ORANGE};padding-bottom:3px;">${bilingual(`Lecciones Aprendidas`)}</h3>` +
+      r.lecciones_aprendidas.map(l=>`<p style="font-size:10.5pt;">💡 ${l.texto}${l.la_id?` <span style="font-family:'IBM Plex Mono',monospace;font-size:9pt;color:${GRAPH};">(${l.la_id})</span>`:''}</p>`).join('');
   }
   if(Array.isArray(r.adjuntos) && r.adjuntos.length>0){
     // Listado resumen dentro del reporte (los archivos se incrustan luego como páginas de anexo)
-    body += `<h3 style="font-family:Arial;font-size:12pt;color:${NAVY};border-bottom:2px solid ${ORANGE};padding-bottom:3px;">${bilingual(`Anexos al reporte`)}</h3>` +
+    body += `<h3 style="font-family:'IBM Plex Sans',Arial;font-size:12pt;color:${NAVY};border-bottom:2px solid ${ORANGE};padding-bottom:3px;">${bilingual(`Anexos al reporte`)}</h3>` +
       r.adjuntos.map((a,i)=>`<p style="font-size:10.5pt;margin:0 0 3px;">${i+1}. 📎 ${a.nombre}${a.tamano&&a.tamano!=='—'?` <span style="color:${GRAPH};">(${a.tamano})</span>`:''}${a.fecha?` <span style="color:${GRAPH};font-size:9pt;">· ${fmtDate(a.fecha)}</span>`:''}${!a.path?` <span style="color:${GRAPH};font-size:9pt;">· referencia física/externa</span>`:''}</p>`).join('');
   }
 
