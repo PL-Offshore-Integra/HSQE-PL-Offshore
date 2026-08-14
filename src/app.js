@@ -2146,8 +2146,10 @@ function toggleConditionalFields(){
   setLbl('label_titulo', 'Título ' + desc);
   setLbl('label_descripcion', 'Descripción ' + desc);
   document.getElementById('block_ocimf').style.display = TIPOS_CON_OCIMF.includes(tipo) ? 'block' : 'none';
-  document.getElementById('block_clasif_origen').style.display = TIPOS_CON_CLASIF_ORIGEN.includes(tipo) ? 'block' : 'none';
-  document.getElementById('block_auditoria_nc').style.display = (tipo === 'NC') ? 'block' : 'none';
+  // Registros generados automáticamente desde una INSPECCIÓN: no aplican Clasificación ni Origen de Auditoría.
+  const origenInsp = editingId ? ((DATA.records.find(x=>x.id===editingId)||{}).origen_registro_tipo === 'INSP') : false;
+  document.getElementById('block_clasif_origen').style.display = (TIPOS_CON_CLASIF_ORIGEN.includes(tipo) && !origenInsp) ? 'block' : 'none';
+  document.getElementById('block_auditoria_nc').style.display = (tipo === 'NC' && !origenInsp) ? 'block' : 'none';
   const esSug = (tipo === 'SUG');
   const esCap = (tipo === 'CAP');
   const esAud = (tipo === 'AUD');
