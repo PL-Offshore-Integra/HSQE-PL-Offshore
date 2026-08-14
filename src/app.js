@@ -1907,7 +1907,7 @@ function renderHallazgosList(){
         <button class="btn secondary" style="padding:8px 12px;color:var(--red);flex:0 0 auto;" onclick="removeHallazgo(${i})">✕</button>
       </div>
       <div class="field" style="margin:8px 0 0;"><label style="font-size:11px;">Descripción del hallazgo</label>
-        <input type="text" value="${(h.descripcion||'').replace(/"/g,'&quot;')}" placeholder="Descripción del hallazgo" oninput="updateHallazgoField(${i},'descripcion',this.value)">
+        <textarea rows="2" style="min-height:52px;resize:vertical;" placeholder="Descripción del hallazgo" oninput="updateHallazgoField(${i},'descripcion',this.value)">${h.descripcion||''}</textarea>
       </div>
     </div>`).join('');
 }
@@ -1938,16 +1938,17 @@ function renderObservacionesList(){
     const abre = o.genera === 'Sí';
     return `
     <div style="border:1px solid var(--line);border-radius:var(--radius);padding:10px 12px;margin-bottom:8px;background:#F7F9FB;">
-      <div style="display:flex;gap:10px;align-items:flex-start;">
-        <div class="field" style="flex:1;margin-bottom:0;"><label style="font-size:11px;">Observación</label>
-          <input type="text" value="${(o.descripcion||'').replace(/"/g,'&quot;')}" placeholder="Descripción de la observación" oninput="updateObservacionField(${i},'descripcion',this.value)">
-        </div>
-        <button class="btn secondary" style="padding:8px 12px;color:var(--red);flex:0 0 auto;margin-top:18px;" onclick="removeObservacion(${i})">✕</button>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
+        <span class="mono" style="font-size:10px;color:var(--graphite-light);text-transform:uppercase;letter-spacing:0.06em;">Observación ${i+1}</span>
+        <button class="btn secondary" style="padding:5px 10px;color:var(--red);" onclick="removeObservacion(${i})">✕</button>
       </div>
-      <div class="field" style="margin:8px 0 0;"><label style="font-size:11px;">Comentarios del Operador</label>
-        <input type="text" value="${(o.comentario_operador||'').replace(/"/g,'&quot;')}" placeholder="Comentarios del Operador" oninput="updateObservacionField(${i},'comentario_operador',this.value)">
+      <div class="field" style="margin:0 0 8px;"><label style="font-size:11px;">Observación</label>
+        <textarea rows="2" style="min-height:52px;resize:vertical;" placeholder="Descripción de la observación" oninput="updateObservacionField(${i},'descripcion',this.value)">${o.descripcion||''}</textarea>
       </div>
-      <div class="field" style="margin:8px 0 0;"><label style="font-size:11px;">¿Abre un hallazgo (NC / Observación / OM)?</label>
+      <div class="field" style="margin:0 0 8px;"><label style="font-size:11px;">Comentarios del Operador</label>
+        <textarea rows="2" style="min-height:52px;resize:vertical;" placeholder="Comentarios del Operador" oninput="updateObservacionField(${i},'comentario_operador',this.value)">${o.comentario_operador||''}</textarea>
+      </div>
+      <div class="field" style="margin:0;flex:0 0 auto;max-width:320px;"><label style="font-size:11px;">¿Abre un hallazgo (NC / Observación / OM)?</label>
         <select onchange="updateObservacionField(${i},'genera',this.value)">${['No','Sí'].map(v=>`<option value="${v}" ${o.genera===v?'selected':''}>${v}</option>`).join('')}</select>
       </div>
       ${abre ? `
