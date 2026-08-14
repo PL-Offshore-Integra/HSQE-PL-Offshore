@@ -17,7 +17,8 @@ const TYPES = {
   CI:  {label:'Condición Insegura',  color:'#B07D0A'},
   SUG: {label:'Sugerencia de Mejora', color:'#0E7C86'},
   CAP: {label:'Capacitación',        color:'#7A4FA0'},
-  AUD: {label:'Auditoría / Inspección', color:'#3E6B8C'},
+  AUD: {label:'Auditoría',           color:'#3E6B8C'},
+  INSP:{label:'Inspección',          color:'#2F8F83'},
 };
 // Frase para personalizar etiquetas por tipo: "Fecha del incidente", "Título de la sugerencia de mejora", etc.
 const TIPO_DESCRIPTOR = {
@@ -33,6 +34,7 @@ const TIPO_DESCRIPTOR = {
   SUG: 'de la sugerencia de mejora',
   CAP: 'de la capacitación',
   AUD: 'de la auditoría',
+  INSP: 'de la inspección',
 };
 function tipoDescriptor(tipo){ return TIPO_DESCRIPTOR[tipo] || 'del evento'; }
 
@@ -161,7 +163,7 @@ let CLASIF_ORIGEN = ['','ISO','ISM','PNA','Inspección HSQE','Cliente','No Aplic
 // Oportunidad de Mejora y Lección Aprendida no llevan causa raíz/acción correctiva; llevan datos de comunicación
 // Solo Lección Aprendida no lleva causa raíz/acción correctiva; lleva datos de comunicación.
 // Oportunidad de Mejora se trata igual que Observación / No Conformidad (con causa raíz y acción correctiva).
-const TIPOS_SIN_CAUSA_ACCION = ['LA','SUG','CAP','AUD'];
+const TIPOS_SIN_CAUSA_ACCION = ['LA','SUG','CAP','AUD','INSP'];
 const MEDIOS_COMUNICACION = ['','Reunión de Seguridad','Correo Electrónico','Cartelera / Boletín HSQE','Charla de Seguridad (Toolbox Talk)','Sistema de Gestión (SGS)','Otro'];
 
 // Tipos que llevan campo "Lecciones Aprendidas" como parte del registro (Accidente / Incidente / Cuasi Accidente)
@@ -273,6 +275,7 @@ const PARTE_CUERPO = ['',
 let modalAttachments = [];
 let modalLecciones = [];
 let modalHallazgos = [];
+let modalObservaciones = [];
 let modalInvestigadores = [];
 let modalCapParticipantes = [];
 let modalAccionesCorrectivas = [];
@@ -569,12 +572,12 @@ const NAV_GROUP_HALLAZGOS = ['NC','OBS','OM'];
 const NAV_GROUP_EVENTOS = ['INC','ACC','CUA','LA'];
 const NAV_ORDER_PROACTIVOS = ['AI','CI','SUG'];
 const NAV_GROUP_CAPACITACION = ['CAP'];
-const NAV_GROUP_AUDITORIAS = ['AUD'];
+const NAV_GROUP_AUDITORIAS = ['AUD','INSP'];
 const NAV_ORDER_ALL_TYPES = [...NAV_GROUP_AUDITORIAS, ...NAV_GROUP_HALLAZGOS, ...NAV_GROUP_EVENTOS, ...NAV_ORDER_PROACTIVOS, ...NAV_GROUP_CAPACITACION];
 // Color del punto/bullet en el menú (independiente del color del tipo en tablas/gráficos)
 const NAV_DOT_COLORS = {
   ALL:'#002247',
-  AUD:'#3E6B8C',                                       // auditorías
+  AUD:'#3E6B8C', INSP:'#2F8F83',                       // auditorías / inspecciones
   NC:'#E67E22', OBS:'#E67E22', OM:'#E67E22',            // naranja
   INC:'#C0392B', ACC:'#C0392B', CUA:'#C0392B', LA:'#C0392B', // rojo
   AI:'#8FC1E8', CI:'#8FC1E8', SUG:'#8FC1E8',            // celeste claro
@@ -609,7 +612,10 @@ function navItem(key, label, color, count){
   </div>`;
 }
 function setTypeFilter(k){
+  const cambioTipo = (k !== currentTypeFilter);
   currentTypeFilter = k;
+  // El filtro por norma/tipo es específico de cada sección: se resetea al cambiar de sección.
+  if(cambioTipo){ const el = document.getElementById('tipoAudFilter'); if(el) el.value = ''; }
   // "Todos los registros" limpia los filtros para traer todo
   if(k === 'ALL'){
     const setVal = (id, v='') => { const el = document.getElementById(id); if(el) el.value = v; };
@@ -624,6 +630,7 @@ function clearFilters(){
   setVal('statusFilter');
   setVal('sevFilter');
   setVal('overdueFilter');
+  setVal('tipoAudFilter');
   setVal('dateFrom');
   setVal('dateTo');
   currentClienteFilter = 'ALL';   // el filtro de cliente es variable de estado; hay que resetearlo aquí
@@ -655,11 +662,16 @@ function applyTableFilters(list){
   const st = document.getElementById('statusFilter')?.value||'';
   const sv = document.getElementById('sevFilter')?.value||'';
   const ov = document.getElementById('overdueFilter')?.value||'';
+  const tf = document.getElementById('tipoAudFilter')?.value||'';
   return list.filter(r=>{
     if(q && !(`${r.titulo} ${r.descripcion} ${r.area} ${accionesResumen(r).responsable} ${r.reportado_por}`.toLowerCase().includes(q))) return false;
     if(st && r.estado!==st) return false;
     if(sv && r.severidad!==sv) return false;
     if(ov==='overdue' && !isOverdue(r)) return false;
+    if(tf){
+      if(r.tipo==='AUD' && r.aud_norma!==tf) return false;
+      if(r.tipo==='INSP' && r.insp_tipo!==tf) return false;
+    }
     return true;
   });
 }
@@ -1064,6 +1076,15 @@ function getChartSpecs(list, tipo){
       specEstado, specInstalacion,
     ]};
   }
+  if(tipo === 'INSP'){
+    const contarObsHall = (t) => list.reduce((n,r)=> n + (Array.isArray(r.observaciones)? r.observaciones.filter(o=>o.genera==='Sí' && o.tipo===t && (o.descripcion||'').trim()).length : 0), 0);
+    return { scope: TYPES[tipo].label, specs: [
+      { title:'Hallazgos por tipo', kind:'doughnut', labels:['Observación','No Conformidad','Oportunidad de Mejora'],
+        data:[ contarObsHall('OBS'), contarObsHall('NC'), contarObsHall('OM') ],
+        colors:['#E67E22','#C0392B','#2C7FB8'] },
+      specEstado, specInstalacion,
+    ]};
+  }
   if(tipo === 'AUD'){
     const contarHall = (t) => list.reduce((n,r)=> n + (Array.isArray(r.hallazgos)? r.hallazgos.filter(h=>h.tipo===t && (h.descripcion||'').trim()).length : 0), 0);
     return { scope: TYPES[tipo].label, specs: [
@@ -1206,6 +1227,22 @@ function renderTable(){
   if(overdueFilterEl){
     overdueFilterEl.style.display = mostrarEstado ? '' : 'none';
     if(!mostrarEstado) overdueFilterEl.value = '';
+  }
+  // Filtro por tipo (solo en Auditorías / Inspecciones): agrupa por norma/tipo.
+  const tipoAudEl = document.getElementById('tipoAudFilter');
+  if(tipoAudEl){
+    const esAudInsp = currentTypeFilter==='AUD' || currentTypeFilter==='INSP';
+    if(esAudInsp){
+      const campo = currentTypeFilter==='AUD' ? 'aud_norma' : 'insp_tipo';
+      const etiqueta = currentTypeFilter==='AUD' ? 'Todas las normas' : 'Todos los tipos';
+      const valores = [...new Set(DATA.records.filter(r=>r.tipo===currentTypeFilter).map(r=>r[campo]).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));
+      const prev = tipoAudEl.value;
+      tipoAudEl.innerHTML = `<option value="">${etiqueta}</option>` + valores.map(v=>`<option value="${v.replace(/"/g,'&quot;')}" ${prev===v?'selected':''}>${v}</option>`).join('');
+      tipoAudEl.style.display = '';
+    } else {
+      tipoAudEl.style.display = 'none';
+      tipoAudEl.value = '';
+    }
   }
 
   if(list.length===0){
@@ -1439,7 +1476,7 @@ function openRecordForm(id){
         <div class="field"><label id="label_titulo">Título ${tipoDescriptor(tipo)}</label>
           <input type="text" id="f_titulo" value="${r?r.titulo||'':''}" placeholder="Título breve y descriptivo" maxlength="120">
         </div>
-        <div class="field"><label>Área / Departamento</label>
+        <div class="field" id="block_area"><label>Área / Departamento</label>
           <input type="text" id="f_area" value="${r?r.area||'':''}" placeholder="Ej: Cubierta, Sala de Máquinas, Puente">
         </div>
         <div class="field" id="block_desc_simple"><label id="label_descripcion">Descripción ${tipoDescriptor(tipo)}</label>
@@ -1485,7 +1522,7 @@ function openRecordForm(id){
         <div id="block_clasif_origen">
           <div class="section-title">Clasificación</div>
           <div class="field-row">
-            <div class="field"><label>Clasificación</label>
+            <div class="field">
               <select id="f_clasif_origen">${CLASIF_ORIGEN.map(c=>`<option value="${c}" ${r&&r.clasificacion_origen===c?'selected':''}>${c||'Seleccionar...'}</option>`).join('')}</select>
             </div>
           </div>
@@ -1689,7 +1726,7 @@ function openRecordForm(id){
               <select id="f_aud_alcance">${['','Interna','Externa'].map(o=>`<option value="${o}" ${r&&r.aud_alcance===o?'selected':''}>${o||'Seleccionar...'}</option>`).join('')}</select>
             </div>
             <div class="field"><label>Norma / Tipo</label>
-              <select id="f_aud_norma">${['','ISM','ISO','PSC','Inspección Extraordinaria','Otra'].map(o=>`<option value="${o}" ${r&&r.aud_norma===o?'selected':''}>${o||'Seleccionar...'}</option>`).join('')}</select>
+              <select id="f_aud_norma">${['','ISM','ISO','Cliente'].map(o=>`<option value="${o}" ${r&&r.aud_norma===o?'selected':''}>${o||'Seleccionar...'}</option>`).join('')}</select>
             </div>
           </div>
           <div class="field"><label>Auditor</label>
@@ -1701,6 +1738,27 @@ function openRecordForm(id){
           </div>
           <div style="font-size:11px;color:var(--graphite-light);margin:-2px 0 8px;">Cada hallazgo (Observación / No Conformidad / Oportunidad de Mejora) crea automáticamente su propio registro, para seguirlo desde su sección.</div>
           <div id="hallazgosList"></div>
+        </div>
+
+        <div id="block_insp">
+          <div class="section-title">Datos de la inspección</div>
+          <div class="field-row">
+            <div class="field"><label>Interna / Externa</label>
+              <select id="f_insp_alcance">${['','Interna','Externa'].map(o=>`<option value="${o}" ${r&&r.insp_alcance===o?'selected':''}>${o||'Seleccionar...'}</option>`).join('')}</select>
+            </div>
+            <div class="field"><label>Tipo</label>
+              <select id="f_insp_tipo">${['','OVID','IMCA','Seguridad','PSC','Inspección Extraordinaria'].map(o=>`<option value="${o}" ${r&&r.insp_tipo===o?'selected':''}>${o||'Seleccionar...'}</option>`).join('')}</select>
+            </div>
+          </div>
+          <div class="field"><label>Inspector</label>
+            <input type="text" id="f_insp_inspector" value="${r?(r.insp_inspector||'').replace(/"/g,'&quot;'):''}" placeholder="Nombre del inspector">
+          </div>
+          <div class="section-title with-btn" style="margin-top:8px;">
+            <span style="font-size:12.5px;">Observaciones</span>
+            <button type="button" class="btn secondary" style="padding:5px 10px;" onclick="addObservacion()">+ Agregar observación</button>
+          </div>
+          <div style="font-size:11px;color:var(--graphite-light);margin:-2px 0 8px;">Cada observación puede abrir un hallazgo (No Conformidad / Observación / Oportunidad de Mejora); en ese caso se crea automáticamente su registro para seguirlo.</div>
+          <div id="observacionesList"></div>
         </div>
 
         <div id="block_gestion">
@@ -1764,9 +1822,11 @@ function openRecordForm(id){
   modalInvestigadores = investigadoresFromRecord(r);
   modalCapParticipantes = participantesFromRecord(r);
   modalHallazgos = hallazgosFromRecord(r);
+  modalObservaciones = observacionesFromRecord(r);
   renderInvestigadoresList();
   renderCapParticipantesList();
   renderHallazgosList();
+  renderObservacionesList();
   modalAccionesCorrectivas = accionesFromRecord(r, 'acciones_correctivas');
   modalAccionesPreventivas = accionesFromRecord(r, 'acciones_preventivas');
   renderAccionesBlock('correctiva');
@@ -1850,6 +1910,57 @@ function renderHallazgosList(){
         <input type="text" value="${(h.descripcion||'').replace(/"/g,'&quot;')}" placeholder="Descripción del hallazgo" oninput="updateHallazgoField(${i},'descripcion',this.value)">
       </div>
     </div>`).join('');
+}
+
+/* ============ OBSERVACIONES (Inspección) ============ */
+function observacionesFromRecord(r){
+  if(r && Array.isArray(r.observaciones)) return JSON.parse(JSON.stringify(r.observaciones));
+  return [];
+}
+function addObservacion(){
+  modalObservaciones.push({ descripcion:'', comentario_operador:'', genera:'No', tipo:'OBS', responsable:'', rec_id:null });
+  renderObservacionesList();
+}
+function removeObservacion(i){
+  modalObservaciones.splice(i,1);
+  renderObservacionesList();
+}
+function updateObservacionField(i, campo, val){
+  if(!modalObservaciones[i]) return;
+  modalObservaciones[i][campo] = val;
+  if(campo === 'genera') renderObservacionesList(); // muestra/oculta tipo + responsable
+}
+function renderObservacionesList(){
+  const wrap = document.getElementById('observacionesList');
+  if(!wrap) return;
+  if(modalObservaciones.length===0){ wrap.innerHTML = '<span style="font-size:12px;color:var(--graphite-light)">Sin observaciones cargadas.</span>'; return; }
+  wrap.innerHTML = modalObservaciones.map((o,i)=>{
+    const abre = o.genera === 'Sí';
+    return `
+    <div style="border:1px solid var(--line);border-radius:var(--radius);padding:10px 12px;margin-bottom:8px;background:#F7F9FB;">
+      <div style="display:flex;gap:10px;align-items:flex-start;">
+        <div class="field" style="flex:1;margin-bottom:0;"><label style="font-size:11px;">Observación</label>
+          <input type="text" value="${(o.descripcion||'').replace(/"/g,'&quot;')}" placeholder="Descripción de la observación" oninput="updateObservacionField(${i},'descripcion',this.value)">
+        </div>
+        <button class="btn secondary" style="padding:8px 12px;color:var(--red);flex:0 0 auto;margin-top:18px;" onclick="removeObservacion(${i})">✕</button>
+      </div>
+      <div class="field" style="margin:8px 0 0;"><label style="font-size:11px;">Comentarios del Operador</label>
+        <input type="text" value="${(o.comentario_operador||'').replace(/"/g,'&quot;')}" placeholder="Comentarios del Operador" oninput="updateObservacionField(${i},'comentario_operador',this.value)">
+      </div>
+      <div class="field" style="margin:8px 0 0;"><label style="font-size:11px;">¿Abre un hallazgo (NC / Observación / OM)?</label>
+        <select onchange="updateObservacionField(${i},'genera',this.value)">${['No','Sí'].map(v=>`<option value="${v}" ${o.genera===v?'selected':''}>${v}</option>`).join('')}</select>
+      </div>
+      ${abre ? `
+      <div style="display:flex;gap:10px;align-items:flex-end;margin-top:8px;">
+        <div class="field" style="flex:0 0 170px;margin-bottom:0;"><label style="font-size:11px;">Tipo de hallazgo ${o.rec_id?`<span class="mono" style="color:var(--graphite-light);font-size:10px;font-weight:400;">(reg. ${o.rec_id})</span>`:''}</label>
+          <select onchange="updateObservacionField(${i},'tipo',this.value)">${HALLAZGO_TIPOS.map(([v,l])=>`<option value="${v}" ${o.tipo===v?'selected':''}>${l}</option>`).join('')}</select>
+        </div>
+        <div class="field" style="flex:1;margin-bottom:0;"><label style="font-size:11px;">Responsable</label>
+          <select onchange="updateObservacionField(${i},'responsable',this.value)">${cargoOptionsHtml(o.responsable)}</select>
+        </div>
+      </div>` : ''}
+    </div>`;
+  }).join('');
 }
 
 function addLeccion(){
@@ -2032,14 +2143,17 @@ function toggleConditionalFields(){
   const esSug = (tipo === 'SUG');
   const esCap = (tipo === 'CAP');
   const esAud = (tipo === 'AUD');
+  const esInsp = (tipo === 'INSP');
   if(esCap) setLbl('label_titulo', 'Tema de la capacitación');
+  document.getElementById('block_area').style.display = (esAud || esInsp) ? 'none' : 'block';
   document.getElementById('block_causa_accion').style.display = TIPOS_SIN_CAUSA_ACCION.includes(tipo) ? 'none' : 'block';
-  document.getElementById('block_responsable_simple').style.display = (TIPOS_SIN_CAUSA_ACCION.includes(tipo) && !esSug && !esCap && !esAud) ? 'grid' : 'none';
-  document.getElementById('block_comunicacion').style.display = (TIPOS_SIN_CAUSA_ACCION.includes(tipo) && !esSug && !esCap && !esAud) ? 'block' : 'none';
+  document.getElementById('block_responsable_simple').style.display = (TIPOS_SIN_CAUSA_ACCION.includes(tipo) && !esSug && !esCap && !esAud && !esInsp) ? 'grid' : 'none';
+  document.getElementById('block_comunicacion').style.display = (TIPOS_SIN_CAUSA_ACCION.includes(tipo) && !esSug && !esCap && !esAud && !esInsp) ? 'block' : 'none';
   document.getElementById('block_sug_seguimiento').style.display = esSug ? 'block' : 'none';
   document.getElementById('block_cap').style.display = esCap ? 'block' : 'none';
   document.getElementById('block_aud').style.display = esAud ? 'block' : 'none';
-  document.getElementById('block_reportado').style.display = (esCap || esAud) ? 'none' : 'block';
+  document.getElementById('block_insp').style.display = esInsp ? 'block' : 'none';
+  document.getElementById('block_reportado').style.display = (esCap || esAud || esInsp) ? 'none' : 'block';
   document.getElementById('block_gestion').style.display = (esSug || esCap) ? 'none' : 'block';
   document.getElementById('block_cuasi').style.display = (tipo === 'CUA') ? 'block' : 'none';
   document.getElementById('block_categoria_aici').style.display = (tipo === 'INC') ? 'block' : 'none';
@@ -2048,7 +2162,7 @@ function toggleConditionalFields(){
   document.getElementById('block_investigadores').style.display = esInc ? 'block' : 'none';
   document.getElementById('block_condiciones_inc').style.display = esInc ? 'block' : 'none';
   document.getElementById('block_desc_inc').style.display = esInc ? 'block' : 'none';
-  document.getElementById('block_desc_simple').style.display = (esInc || esAud) ? 'none' : 'block';
+  document.getElementById('block_desc_simple').style.display = (esInc || esAud || esInsp) ? 'none' : 'block';
   updateCategoriaOptions();
   document.getElementById('block_severidad').style.display = TIPOS_CON_SEVERIDAD.includes(tipo) ? 'block' : 'none';
   document.getElementById('block_lecciones').style.display = TIPOS_CON_LECCIONES.includes(tipo) ? 'block' : 'none';
@@ -2257,6 +2371,7 @@ async function saveRecord(){
   const esSug = (tipoSel === 'SUG');
   const esCap = (tipoSel === 'CAP');
   const esAud = (tipoSel === 'AUD');
+  const esInsp = (tipoSel === 'INSP');
   const estadoSel = esCap ? 'Cerrado' : (esSug ? getIf('f_sug_estado') : get('f_estado'));
   const esInc = (tipoSel === 'INC');
 
@@ -2343,6 +2458,10 @@ async function saveRecord(){
     aud_norma: esAud ? getIf('f_aud_norma') : '',
     aud_auditor: esAud ? getIf('f_aud_auditor').trim() : '',
     hallazgos: esAud ? JSON.parse(JSON.stringify(modalHallazgos.filter(h => (h.descripcion||'').trim()))) : [],
+    insp_alcance: esInsp ? getIf('f_insp_alcance') : '',
+    insp_tipo: esInsp ? getIf('f_insp_tipo') : '',
+    insp_inspector: esInsp ? getIf('f_insp_inspector').trim() : '',
+    observaciones: esInsp ? JSON.parse(JSON.stringify(modalObservaciones.filter(o => (o.descripcion||'').trim()))) : [],
     fuerza_viento: esInc ? getIf('f_fuerza_viento') : '',
     estado_mar: esInc ? getIf('f_estado_mar') : '',
     fuente_luz: esInc ? getIf('f_fuente_luz') : '',
@@ -2413,6 +2532,7 @@ async function saveRecord(){
   }
   const nuevasLA = manageLeccionesAprendidas(rec);
   const nuevosHall = manageHallazgosAuditoria(rec);
+  const nuevosObs = manageObservacionesInspeccion(rec);
   const cambiados = [rec];
   (rec.lecciones_aprendidas || []).forEach(item => {
     if(item.la_id){
@@ -2426,16 +2546,66 @@ async function saveRecord(){
       if(hijo) cambiados.push(hijo);
     }
   });
+  (rec.observaciones || []).forEach(item => {
+    if(item.rec_id){
+      const hijo = DATA.records.find(x => x.id === item.rec_id);
+      if(hijo) cambiados.push(hijo);
+    }
+  });
   const resultados = await Promise.all(cambiados.map(r => upsertRegistro(r)));
   await saveCatalogos(); // personas nuevas registradas
   if(resultados.some(ok => !ok)){ return; } // error ya notificado; el modal queda abierto
   closeModal();
   renderAll();
-  showToast(nuevosHall>0 ? `Auditoría guardada — se ${nuevosHall===1?'creó 1 hallazgo':'crearon '+nuevosHall+' hallazgos'} para seguimiento` : (nuevasLA>0 ? `Registro guardado — se ${nuevasLA===1?'generó 1 Lección Aprendida':'generaron '+nuevasLA+' Lecciones Aprendidas'} para seguimiento` : (editingId? 'Registro actualizado' : 'Registro creado')));
+  const generadosTotal = nuevosHall + nuevosObs;
+  showToast(generadosTotal>0 ? `Guardado — se ${generadosTotal===1?'creó 1 hallazgo':'crearon '+generadosTotal+' hallazgos'} para seguimiento` : (nuevasLA>0 ? `Registro guardado — se ${nuevasLA===1?'generó 1 Lección Aprendida':'generaron '+nuevasLA+' Lecciones Aprendidas'} para seguimiento` : (editingId? 'Registro actualizado' : 'Registro creado')));
   if(sinMail.length){
     setTimeout(() => showToast('Ojo: sin correo cargado (no recibirán aviso): ' + sinMail.join(', ') + '. Cargalo en Gestionar catálogos → Cargos.'), 2600);
   }
 }
+function manageObservacionesInspeccion(rec){
+  if(rec.tipo !== 'INSP' || !Array.isArray(rec.observaciones)) return 0;
+  let nuevos = 0;
+  rec.observaciones.forEach(item=>{
+    const abre = item.genera === 'Sí';
+    const tipoH = item.tipo;
+    const desc = (item.descripcion||'').trim();
+    if(!abre || !tipoH || !desc) return;
+    const descHijo = desc + (item.comentario_operador ? `\nComentarios del Operador: ${item.comentario_operador}` : '');
+    if(item.rec_id){
+      const hijo = DATA.records.find(x => x.id === item.rec_id && x.tipo === tipoH);
+      if(hijo){ hijo.descripcion = descHijo; hijo.responsable = item.responsable || ''; return; }
+    }
+    const hijo = {
+      id: generateRecordId(tipoH, rec.fecha),
+      tipo: tipoH,
+      empresa_id: rec.empresa_id,
+      cliente_operacion: rec.cliente_operacion,
+      instalacion: rec.instalacion,
+      fecha: rec.fecha,
+      area: rec.area,
+      titulo: `Hallazgo de inspección ${rec.id}`,
+      descripcion: descHijo,
+      reportado_por: rec.insp_inspector || '',
+      clasificacion_origen: '',
+      severidad: '',
+      estado: 'Abierto',
+      comunicar_a: '', medio_comunicacion: '', plazo_comunicacion: '',
+      responsable: item.responsable || '', fecha_vencimiento: '', fecha_cierre: '',
+      referencia_normativa: `Generada automáticamente desde ${rec.id}`,
+      acciones_correctivas: [], acciones_preventivas: [],
+      adjuntos: [], lecciones_aprendidas: [],
+      origen_automatico: true,
+      origen_registro_id: rec.id,
+      origen_registro_tipo: rec.tipo,
+    };
+    DATA.records.push(hijo);
+    item.rec_id = hijo.id;
+    nuevos++;
+  });
+  return nuevos;
+}
+
 function manageHallazgosAuditoria(rec){
   if(rec.tipo !== 'AUD' || !Array.isArray(rec.hallazgos)) return 0;
   let nuevos = 0;
@@ -3114,6 +3284,11 @@ async function composeRecordBody(id){
     metaCells.push({l:'Norma / Tipo', v:r.aud_norma||'—'});
     metaCells.push({l:'Auditor', v:r.aud_auditor||'—'});
     metaCells.push({l:'Estado actual', v:r.estado||'—'});
+  } else if(r.tipo==='INSP'){
+    metaCells.push({l:'Interna / Externa', v:r.insp_alcance||'—'});
+    metaCells.push({l:'Tipo', v:r.insp_tipo||'—'});
+    metaCells.push({l:'Inspector', v:r.insp_inspector||'—'});
+    metaCells.push({l:'Estado actual', v:r.estado||'—'});
   } else {
     if(TIPOS_CON_SEVERIDAD.includes(r.tipo)) metaCells.push({l:'Severidad', v:r.severidad||'—'});
     else if(r.tipo==='SUG'){
@@ -3223,6 +3398,33 @@ async function composeRecordBody(id){
       </table>`;
     } else {
       body += `<p style="font-size:10.5pt;">Sin hallazgos cargados.</p>`;
+    }
+  }
+
+  if(r.tipo==='INSP'){
+    const obs = Array.isArray(r.observaciones) ? r.observaciones.filter(o=>(o.descripcion||'').trim()) : [];
+    const nombreTipoH2 = { OBS:'Observación', NC:'No Conformidad', OM:'Oportunidad de Mejora' };
+    body += secH3('Observaciones');
+    if(obs.length){
+      body += `<table style="width:100%;border-collapse:collapse;margin-bottom:10px;font-size:9.5pt;">
+        <tr>
+          <th style="text-align:left;border:1px solid ${LINE};padding:5px 7px;background:#F2F5F8;width:34%;">Observación</th>
+          <th style="text-align:left;border:1px solid ${LINE};padding:5px 7px;background:#F2F5F8;width:30%;">Comentarios del Operador</th>
+          <th style="text-align:left;border:1px solid ${LINE};padding:5px 7px;background:#F2F5F8;width:16%;">Hallazgo</th>
+          <th style="text-align:left;border:1px solid ${LINE};padding:5px 7px;background:#F2F5F8;width:20%;">Registro</th>
+        </tr>
+        ${obs.map(o=>{
+          const abre = o.genera==='Sí';
+          return `<tr>
+            <td style="border:1px solid ${LINE};padding:6px 7px;">${o.descripcion||'—'}</td>
+            <td style="border:1px solid ${LINE};padding:6px 7px;">${o.comentario_operador||'—'}</td>
+            <td style="border:1px solid ${LINE};padding:6px 7px;">${abre ? (nombreTipoH2[o.tipo]||o.tipo) + (o.responsable?` · ${o.responsable}`:'') : 'No'}</td>
+            <td style="border:1px solid ${LINE};padding:6px 7px;font-family:'IBM Plex Mono',monospace;font-size:8.5pt;">${o.rec_id||'—'}</td>
+          </tr>`;
+        }).join('')}
+      </table>`;
+    } else {
+      body += `<p style="font-size:10.5pt;">Sin observaciones cargadas.</p>`;
     }
   }
 
@@ -3468,7 +3670,7 @@ async function printRecordPDF(id){
 }
 
 /* ============ INIT ============ */
-Object.assign(window, { addAccion, addAttachmentFile, addAttachmentManual, addCatalogItem, addDotacionMes, addInvestigador, addLeccion, addCapParticipante, addHallazgo, addVessel, addVisador, clearFilters, closeModal, deleteRecord, exportData, printRecordPDF, openAttachment, openCatalogManager, openRecordForm, openVisadoresManager, printChartsReport, printCompanyReport, removeAccion, removeAttachment, removeCatalogItem, removeDotacionMes, removeInvestigador, removeLeccion, removeCapParticipante, removeHallazgo, removeVessel, removeVisador, renderAll, renderTopbar, topbarSearch, renderAuditNcKpi, renderOcimfKpi, renderScoreCard, setScoreCardYear, setScoreCardTarget, renderTable, saveRecord, setCompanyLogo, setSiteFilter, setClienteFilter, setTypeFilter, toggleCategoriaOtro, toggleTipificacionCausaOtro, toggleVisado, updateAccionField, updateInvestigadorField, updateCapParticipanteField, updateHallazgoField, updateVesselOptions, updateCargoField, addCargo, removeCargo, validateEstadoCierre, refreshData, logoutHsqe });
+Object.assign(window, { addAccion, addAttachmentFile, addAttachmentManual, addCatalogItem, addDotacionMes, addInvestigador, addLeccion, addCapParticipante, addHallazgo, addObservacion, addVessel, addVisador, clearFilters, closeModal, deleteRecord, exportData, printRecordPDF, openAttachment, openCatalogManager, openRecordForm, openVisadoresManager, printChartsReport, printCompanyReport, removeAccion, removeAttachment, removeCatalogItem, removeDotacionMes, removeInvestigador, removeLeccion, removeCapParticipante, removeHallazgo, removeObservacion, removeVessel, removeVisador, renderAll, renderTopbar, topbarSearch, renderAuditNcKpi, renderOcimfKpi, renderScoreCard, setScoreCardYear, setScoreCardTarget, renderTable, saveRecord, setCompanyLogo, setSiteFilter, setClienteFilter, setTypeFilter, toggleCategoriaOtro, toggleTipificacionCausaOtro, toggleVisado, updateAccionField, updateInvestigadorField, updateCapParticipanteField, updateHallazgoField, updateObservacionField, updateVesselOptions, updateCargoField, addCargo, removeCargo, validateEstadoCierre, refreshData, logoutHsqe });
 
 async function logoutHsqe(){
   await supabase.auth.signOut();
