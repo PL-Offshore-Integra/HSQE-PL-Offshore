@@ -2506,8 +2506,9 @@ async function saveRecord(){
     sug_observacion: esSug ? getIf('f_sug_observacion') : '',
     adjuntos: JSON.parse(JSON.stringify(modalAttachments)),
   };
-  if(!rec.fecha || !rec.titulo || !rec.descripcion){
-    showToast(esInc ? 'Completá al menos fecha, título y la pregunta 1 (Describa qué pasó)' : 'Completá al menos fecha, título y descripción');
+  const requiereDescripcion = !esCap && !esAud && !esInsp; // estos tipos no tienen campo descripción propio
+  if(!rec.fecha || !rec.titulo || (requiereDescripcion && !rec.descripcion)){
+    showToast(esInc ? 'Completá al menos fecha, título y la pregunta 1 (Describa qué pasó)' : (requiereDescripcion ? 'Completá al menos fecha, título y descripción' : 'Completá al menos fecha y título'));
     return;
   }
 
