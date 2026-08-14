@@ -132,6 +132,7 @@
         <option>Abierto</option><option>En Proceso</option><option>Cerrado</option>
       </select>
       <select id="clienteFilter" onchange="setClienteFilter(this.value)"></select>
+      <select id="tipoAudFilter" onchange="renderTable()" style="display:none;"></select>
       <select id="overdueFilter" onchange="renderTable()">
         <option value="">Todos los vencimientos</option>
         <option value="overdue">Solo vencidas</option>
