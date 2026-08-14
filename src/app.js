@@ -48,7 +48,7 @@ const EN = {
   'Capacitación':'Training',
   'Auditoría':'Audit','Datos de la auditoría':'Audit data','Tipo de auditoría':'Audit type',
   'Auditor':'Auditor','Hallazgos':'Findings','Tipo':'Type','Fecha de la auditoría':'Audit date',
-  'Interna / Externa':'Internal / External','Norma / Tipo':'Standard / Type','Responsable':'Responsible',
+  'Interna / Externa':'Internal / External','Norma / Tipo':'Standard / Type','Responsable':'Responsible','Estado':'Status',
   'Descripción de la auditoría':'Audit Description',
   'Datos de la capacitación':'Training data','Evaluación de la capacitación':'Training evaluation',
   'Participantes':'Participants','Instructor':'Instructor','Duración':'Duration',
@@ -1754,10 +1754,10 @@ function openRecordForm(id){
             <input type="text" id="f_insp_inspector" value="${r?(r.insp_inspector||'').replace(/"/g,'&quot;'):''}" placeholder="Nombre del inspector">
           </div>
           <div class="section-title with-btn" style="margin-top:8px;">
-            <span style="font-size:12.5px;">Observaciones</span>
-            <button type="button" class="btn secondary" style="padding:5px 10px;" onclick="addObservacion()">+ Agregar observación</button>
+            <span style="font-size:12.5px;">Hallazgos</span>
+            <button type="button" class="btn secondary" style="padding:5px 10px;" onclick="addObservacion()">+ Agregar hallazgo</button>
           </div>
-          <div style="font-size:11px;color:var(--graphite-light);margin:-2px 0 8px;">Cada observación puede abrir un hallazgo (No Conformidad / Observación / Oportunidad de Mejora); en ese caso se crea automáticamente su registro para seguirlo.</div>
+          <div style="font-size:11px;color:var(--graphite-light);margin:-2px 0 8px;">Cada hallazgo se registra con su responsable, vencimiento y estado. Opcionalmente podés abrir un registro de seguimiento (NC / Observación / OM), que se crea automáticamente en su sección.</div>
           <div id="observacionesList"></div>
         </div>
 
@@ -1918,7 +1918,7 @@ function observacionesFromRecord(r){
   return [];
 }
 function addObservacion(){
-  modalObservaciones.push({ descripcion:'', comentario_operador:'', genera:'No', tipo:'OBS', responsable:'', rec_id:null });
+  modalObservaciones.push({ descripcion:'', comentario_operador:'', responsable:'', vencimiento:'', estado:'Abierto', genera:'No', tipo:'OBS', rec_id:null });
   renderObservacionesList();
 }
 function removeObservacion(i){
@@ -1933,32 +1933,39 @@ function updateObservacionField(i, campo, val){
 function renderObservacionesList(){
   const wrap = document.getElementById('observacionesList');
   if(!wrap) return;
-  if(modalObservaciones.length===0){ wrap.innerHTML = '<span style="font-size:12px;color:var(--graphite-light)">Sin observaciones cargadas.</span>'; return; }
+  if(modalObservaciones.length===0){ wrap.innerHTML = '<span style="font-size:12px;color:var(--graphite-light)">Sin hallazgos cargados.</span>'; return; }
+  const ESTADOS = ['Abierto','En Proceso','Cerrado'];
   wrap.innerHTML = modalObservaciones.map((o,i)=>{
     const abre = o.genera === 'Sí';
     return `
     <div style="border:1px solid var(--line);border-radius:var(--radius);padding:10px 12px;margin-bottom:8px;background:#F7F9FB;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
-        <span class="mono" style="font-size:10px;color:var(--graphite-light);text-transform:uppercase;letter-spacing:0.06em;">Observación ${i+1}</span>
+        <span class="mono" style="font-size:10px;color:var(--graphite-light);text-transform:uppercase;letter-spacing:0.06em;">Hallazgo ${i+1}${o.rec_id?` · <span style="color:var(--navy);">registro ${o.rec_id}</span>`:''}</span>
         <button class="btn secondary" style="padding:5px 10px;color:var(--red);" onclick="removeObservacion(${i})">✕</button>
       </div>
-      <div class="field" style="margin:0 0 8px;"><label style="font-size:11px;">Observación</label>
-        <textarea rows="2" style="min-height:52px;resize:vertical;" placeholder="Descripción de la observación" oninput="updateObservacionField(${i},'descripcion',this.value)">${o.descripcion||''}</textarea>
+      <div class="field" style="margin:0 0 8px;"><label style="font-size:11px;">Hallazgo</label>
+        <textarea rows="2" style="min-height:52px;resize:vertical;" placeholder="Descripción del hallazgo" oninput="updateObservacionField(${i},'descripcion',this.value)">${o.descripcion||''}</textarea>
       </div>
       <div class="field" style="margin:0 0 8px;"><label style="font-size:11px;">Comentarios del Operador</label>
         <textarea rows="2" style="min-height:52px;resize:vertical;" placeholder="Comentarios del Operador" oninput="updateObservacionField(${i},'comentario_operador',this.value)">${o.comentario_operador||''}</textarea>
       </div>
-      <div class="field" style="margin:0;flex:0 0 auto;max-width:320px;"><label style="font-size:11px;">¿Abre un hallazgo (NC / Observación / OM)?</label>
+      <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
+        <div class="field" style="flex:1 1 160px;margin-bottom:0;"><label style="font-size:11px;">Responsable</label>
+          <select onchange="updateObservacionField(${i},'responsable',this.value)">${cargoOptionsHtml(o.responsable)}</select>
+        </div>
+        <div class="field" style="flex:0 0 150px;margin-bottom:0;"><label style="font-size:11px;">Vencimiento</label>
+          <input type="date" value="${o.vencimiento||''}" onchange="updateObservacionField(${i},'vencimiento',this.value)">
+        </div>
+        <div class="field" style="flex:0 0 150px;margin-bottom:0;"><label style="font-size:11px;">Estado</label>
+          <select onchange="updateObservacionField(${i},'estado',this.value)">${ESTADOS.map(e=>`<option value="${e}" ${o.estado===e?'selected':''}>${e}</option>`).join('')}</select>
+        </div>
+      </div>
+      <div class="field" style="margin:8px 0 0;max-width:340px;"><label style="font-size:11px;">¿Abrir registro de hallazgo para seguimiento?</label>
         <select onchange="updateObservacionField(${i},'genera',this.value)">${['No','Sí'].map(v=>`<option value="${v}" ${o.genera===v?'selected':''}>${v}</option>`).join('')}</select>
       </div>
       ${abre ? `
-      <div style="display:flex;gap:10px;align-items:flex-end;margin-top:8px;">
-        <div class="field" style="flex:0 0 170px;margin-bottom:0;"><label style="font-size:11px;">Tipo de hallazgo ${o.rec_id?`<span class="mono" style="color:var(--graphite-light);font-size:10px;font-weight:400;">(reg. ${o.rec_id})</span>`:''}</label>
-          <select onchange="updateObservacionField(${i},'tipo',this.value)">${HALLAZGO_TIPOS.map(([v,l])=>`<option value="${v}" ${o.tipo===v?'selected':''}>${l}</option>`).join('')}</select>
-        </div>
-        <div class="field" style="flex:1;margin-bottom:0;"><label style="font-size:11px;">Responsable</label>
-          <select onchange="updateObservacionField(${i},'responsable',this.value)">${cargoOptionsHtml(o.responsable)}</select>
-        </div>
+      <div class="field" style="margin:8px 0 0;flex:0 0 200px;max-width:240px;"><label style="font-size:11px;">Tipo de registro</label>
+        <select onchange="updateObservacionField(${i},'tipo',this.value)">${HALLAZGO_TIPOS.map(([v,l])=>`<option value="${v}" ${o.tipo===v?'selected':''}>${l}</option>`).join('')}</select>
       </div>` : ''}
     </div>`;
   }).join('');
@@ -2576,7 +2583,13 @@ function manageObservacionesInspeccion(rec){
     const descHijo = desc + (item.comentario_operador ? `\nComentarios del Operador: ${item.comentario_operador}` : '');
     if(item.rec_id){
       const hijo = DATA.records.find(x => x.id === item.rec_id && x.tipo === tipoH);
-      if(hijo){ hijo.descripcion = descHijo; hijo.responsable = item.responsable || ''; return; }
+      if(hijo){
+        hijo.descripcion = descHijo;
+        hijo.responsable = item.responsable || '';
+        hijo.fecha_vencimiento = item.vencimiento || '';
+        hijo.estado = item.estado || 'Abierto';
+        return;
+      }
     }
     const hijo = {
       id: generateRecordId(tipoH, rec.fecha),
@@ -2591,9 +2604,9 @@ function manageObservacionesInspeccion(rec){
       reportado_por: rec.insp_inspector || '',
       clasificacion_origen: '',
       severidad: '',
-      estado: 'Abierto',
+      estado: item.estado || 'Abierto',
       comunicar_a: '', medio_comunicacion: '', plazo_comunicacion: '',
-      responsable: item.responsable || '', fecha_vencimiento: '', fecha_cierre: '',
+      responsable: item.responsable || '', fecha_vencimiento: item.vencimiento || '', fecha_cierre: '',
       referencia_normativa: `Generada automáticamente desde ${rec.id}`,
       acciones_correctivas: [], acciones_preventivas: [],
       adjuntos: [], lecciones_aprendidas: [],
@@ -3396,7 +3409,7 @@ async function composeRecordBody(id){
     if(halls.length){
       body += `<table style="width:100%;border-collapse:collapse;margin-bottom:10px;font-size:10pt;">
         <tr><th style="text-align:left;border:1px solid ${LINE};padding:5px 8px;background:#F2F5F8;width:16%;">${bilingual('Tipo')}</th><th style="text-align:left;border:1px solid ${LINE};padding:5px 8px;background:#F2F5F8;width:44%;">Descripción <span style="font-style:italic;color:#9AA6B2;font-weight:400;">· Description</span></th><th style="text-align:left;border:1px solid ${LINE};padding:5px 8px;background:#F2F5F8;width:22%;">${bilingual('Responsable')}</th><th style="text-align:left;border:1px solid ${LINE};padding:5px 8px;background:#F2F5F8;width:18%;">Registro <span style="font-style:italic;color:#9AA6B2;font-weight:400;">· Record</span></th></tr>
-        ${halls.map(h=>`<tr><td style="border:1px solid ${LINE};padding:6px 8px;">${nombreTipoH[h.tipo]||h.tipo||'—'}</td><td style="border:1px solid ${LINE};padding:6px 8px;">${h.descripcion||'—'}</td><td style="border:1px solid ${LINE};padding:6px 8px;">${h.responsable||'—'}</td><td style="border:1px solid ${LINE};padding:6px 8px;font-family:'IBM Plex Mono',monospace;font-size:9pt;">${h.rec_id||'—'}</td></tr>`).join('')}
+        ${halls.map(h=>`<tr><td style="border:1px solid ${LINE};padding:6px 8px;">${nombreTipoH[h.tipo]||h.tipo||'—'}</td><td style="border:1px solid ${LINE};padding:6px 8px;">${h.descripcion||'—'}</td><td style="border:1px solid ${LINE};padding:6px 8px;">${h.responsable||'—'}</td><td style="border:1px solid ${LINE};padding:6px 8px;font-family:'IBM Plex Mono',monospace;font-size:9pt;">${h.rec_id ? codigoMostrado(DATA.records.find(x=>x.id===h.rec_id)||{tipo:h.tipo,fecha:r.fecha,id:h.rec_id}) : '—'}</td></tr>`).join('')}
       </table>`;
     } else {
       body += `<p style="font-size:10.5pt;">Sin hallazgos cargados.</p>`;
@@ -3406,27 +3419,34 @@ async function composeRecordBody(id){
   if(r.tipo==='INSP'){
     const obs = Array.isArray(r.observaciones) ? r.observaciones.filter(o=>(o.descripcion||'').trim()) : [];
     const nombreTipoH2 = { OBS:'Observación', NC:'No Conformidad', OM:'Oportunidad de Mejora' };
-    body += secH3('Observaciones');
+    body += secH3('Hallazgos');
     if(obs.length){
-      body += `<table style="width:100%;border-collapse:collapse;margin-bottom:10px;font-size:9.5pt;">
+      body += `<table style="width:100%;border-collapse:collapse;margin-bottom:10px;font-size:9pt;">
         <tr>
-          <th style="text-align:left;border:1px solid ${LINE};padding:5px 7px;background:#F2F5F8;width:34%;">Observación</th>
-          <th style="text-align:left;border:1px solid ${LINE};padding:5px 7px;background:#F2F5F8;width:30%;">Comentarios del Operador</th>
-          <th style="text-align:left;border:1px solid ${LINE};padding:5px 7px;background:#F2F5F8;width:16%;">Hallazgo</th>
-          <th style="text-align:left;border:1px solid ${LINE};padding:5px 7px;background:#F2F5F8;width:20%;">Registro</th>
+          <th style="text-align:left;border:1px solid ${LINE};padding:5px 6px;background:#F2F5F8;width:4%;">N°</th>
+          <th style="text-align:left;border:1px solid ${LINE};padding:5px 6px;background:#F2F5F8;width:27%;">Hallazgo <span style="font-style:italic;color:#9AA6B2;font-weight:400;">· Finding</span></th>
+          <th style="text-align:left;border:1px solid ${LINE};padding:5px 6px;background:#F2F5F8;width:24%;">Comentario del Operador</th>
+          <th style="text-align:left;border:1px solid ${LINE};padding:5px 6px;background:#F2F5F8;width:14%;">${bilingual('Responsable')}</th>
+          <th style="text-align:left;border:1px solid ${LINE};padding:5px 6px;background:#F2F5F8;width:11%;">Vencim.</th>
+          <th style="text-align:left;border:1px solid ${LINE};padding:5px 6px;background:#F2F5F8;width:9%;">${bilingual('Estado')}</th>
+          <th style="text-align:left;border:1px solid ${LINE};padding:5px 6px;background:#F2F5F8;width:11%;">Registro <span style="font-style:italic;color:#9AA6B2;font-weight:400;">· Record</span></th>
         </tr>
-        ${obs.map(o=>{
-          const abre = o.genera==='Sí';
+        ${obs.map((o,idx)=>{
+          const hijo = o.rec_id ? DATA.records.find(x=>x.id===o.rec_id) : null;
+          const codReg = o.rec_id ? codigoMostrado(hijo||{tipo:o.tipo,fecha:r.fecha,id:o.rec_id}) : '—';
           return `<tr>
-            <td style="border:1px solid ${LINE};padding:6px 7px;">${o.descripcion||'—'}</td>
-            <td style="border:1px solid ${LINE};padding:6px 7px;">${o.comentario_operador||'—'}</td>
-            <td style="border:1px solid ${LINE};padding:6px 7px;">${abre ? (nombreTipoH2[o.tipo]||o.tipo) + (o.responsable?` · ${o.responsable}`:'') : 'No'}</td>
-            <td style="border:1px solid ${LINE};padding:6px 7px;font-family:'IBM Plex Mono',monospace;font-size:8.5pt;">${o.rec_id||'—'}</td>
+            <td style="border:1px solid ${LINE};padding:5px 6px;">${idx+1}</td>
+            <td style="border:1px solid ${LINE};padding:5px 6px;">${o.descripcion||'—'}</td>
+            <td style="border:1px solid ${LINE};padding:5px 6px;">${o.comentario_operador||'—'}</td>
+            <td style="border:1px solid ${LINE};padding:5px 6px;">${o.responsable||'—'}</td>
+            <td style="border:1px solid ${LINE};padding:5px 6px;white-space:nowrap;">${o.vencimiento?fmtDate(o.vencimiento):'—'}</td>
+            <td style="border:1px solid ${LINE};padding:5px 6px;">${o.estado||'—'}</td>
+            <td style="border:1px solid ${LINE};padding:5px 6px;font-family:'IBM Plex Mono',monospace;font-size:8pt;">${codReg}</td>
           </tr>`;
         }).join('')}
       </table>`;
     } else {
-      body += `<p style="font-size:10.5pt;">Sin observaciones cargadas.</p>`;
+      body += `<p style="font-size:10.5pt;">Sin hallazgos cargados.</p>`;
     }
   }
 
