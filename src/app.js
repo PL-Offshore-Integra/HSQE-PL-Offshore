@@ -291,11 +291,10 @@ let currentClienteFilter = 'ALL';
 let CURRENT_USER = null; // email de la sesión activa (se setea en initApp)
 
 // Visador por defecto (se puede administrar desde "Gestionar usuarios / visadores").
-// Nota: los dominios de correo no admiten acentos ni ñ; se usa 'paranalogistica' (sin acento).
-const VISADOR_DEFAULT = { email: 'emartinez@paranalogistica.com.ar', nombre: 'Emmanuel Martinez', cargo: 'Gte. HSQE/DPA' };
+const VISADOR_DEFAULT = { email: 'emartinez@ploffshore.com', nombre: 'Emmanuel Martinez', cargo: 'Gte. HSQE/DPA' };
 const VISADORES_DEFAULT = [
-  { email: 'emartinez@paranalogistica.com.ar', nombre: 'Emmanuel Martinez', cargo: 'Gte. HSQE/DPA' },
-  { email: 'mpadilla@paranalogistica.com.ar', nombre: 'M. Padilla', cargo: 'HSQE/DPA' },
+  { email: 'emartinez@ploffshore.com', nombre: 'Emmanuel Martinez', cargo: 'Gte. HSQE/DPA' },
+  { email: 'mpadilla@ploffshore.com', nombre: 'M. Padilla', cargo: 'HSQE/DPA' },
 ];
 
 // Normaliza email para comparar: minúsculas + sin acentos (tolera 'logística' vs 'logistica').
@@ -332,7 +331,16 @@ async function loadData(){
     DATA.companies = (cfgRes.data && cfgRes.data.data && Array.isArray(cfgRes.data.data.companies)) ? cfgRes.data.data.companies : [];
     DATA.scorecardTargets = (cfgRes.data && cfgRes.data.data && cfgRes.data.data.scorecardTargets) ? cfgRes.data.data.scorecardTargets : {};
     DATA.visadores = (cfgRes.data && cfgRes.data.data && Array.isArray(cfgRes.data.data.visadores)) ? cfgRes.data.data.visadores : [];
+    // Migración: correos de visadores movidos de @paranalogistica.com.ar a @ploffshore.com
+    const REMAP_VISADORES = { 'emartinez@paranalogistica.com.ar':'emartinez@ploffshore.com', 'mpadilla@paranalogistica.com.ar':'mpadilla@ploffshore.com' };
+    let visadoresRemap = false;
+    DATA.visadores = DATA.visadores.map(v => {
+      const nuevo = REMAP_VISADORES[(v.email||'').trim().toLowerCase()];
+      if(nuevo){ visadoresRemap = true; return { ...v, email: nuevo }; }
+      return v;
+    });
     if(DATA.visadores.length === 0){ DATA.visadores = VISADORES_DEFAULT.map(v=>({...v})); await saveConfig(); }
+    else if(visadoresRemap){ await saveConfig(); }
     if(DATA.companies.length === 0){ seedDefaults(); await saveConfig(); }
   }catch(e){
     console.error('Error cargando datos HSQE:', e && e.message ? e.message : e);
