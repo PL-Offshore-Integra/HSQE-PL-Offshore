@@ -2365,6 +2365,7 @@ async function toggleVisado(id){
   const r = DATA.records.find(x=>x.id===id);
   if(!r){ showToast('No se encontró el registro'); return; }
   const v = getVisador(CURRENT_USER);
+  const prevVisado = { visado:r.visado, visado_por:r.visado_por, visado_cargo:r.visado_cargo, visado_email:r.visado_email, visado_fecha:r.visado_fecha };
   if(r.visado){
     if(!confirm('¿Quitar el visado de este reporte?')) return;
     r.visado = false; r.visado_por=''; r.visado_cargo=''; r.visado_email=''; r.visado_fecha='';
@@ -2376,7 +2377,7 @@ async function toggleVisado(id){
     r.visado_fecha = todayISO();
   }
   const ok = await upsertRegistro(r);
-  if(!ok) return;
+  if(!ok){ Object.assign(r, prevVisado); return; } // el guardado falló: se revierte el cambio en memoria
   const block = document.getElementById('visadoBlock');
   if(block){
     const tmp = document.createElement('div');
