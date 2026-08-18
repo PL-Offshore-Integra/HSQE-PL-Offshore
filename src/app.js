@@ -286,6 +286,7 @@ let DATA = { companies: [], records: [], visadores: [] };
 let currentTypeFilter = 'ALL';
 let currentSiteFilter = 'ALL';
 let currentClienteFilter = 'ALL';
+let currentSearch = '';
 
 /* ============ USUARIO ACTUAL Y VISADO (Responsable HSQE/DPA) ============ */
 let CURRENT_USER = null; // email de la sesión activa (se setea en initApp)
@@ -627,14 +628,14 @@ function setTypeFilter(k){
   // "Todos los registros" limpia los filtros para traer todo
   if(k === 'ALL'){
     const setVal = (id, v='') => { const el = document.getElementById(id); if(el) el.value = v; };
-    setVal('searchBox'); setVal('statusFilter'); setVal('sevFilter'); setVal('overdueFilter'); setVal('dateFrom'); setVal('dateTo');
+    currentSearch = ''; setVal('topbarSearchInput'); setVal('statusFilter'); setVal('sevFilter'); setVal('overdueFilter'); setVal('dateFrom'); setVal('dateTo');
     currentClienteFilter = 'ALL';
   }
   renderAll();
 }
 function clearFilters(){
   const setVal = (id, v='') => { const el = document.getElementById(id); if(el) el.value = v; };
-  setVal('searchBox');
+  currentSearch = ''; setVal('topbarSearchInput');
   setVal('statusFilter');
   setVal('sevFilter');
   setVal('overdueFilter');
@@ -666,7 +667,7 @@ function applyDateFilter(list){
   });
 }
 function applyTableFilters(list){
-  const q = (document.getElementById('searchBox')?.value||'').toLowerCase();
+  const q = currentSearch || '';
   const st = document.getElementById('statusFilter')?.value||'';
   const sv = document.getElementById('sevFilter')?.value||'';
   const ov = document.getElementById('overdueFilter')?.value||'';
@@ -1226,6 +1227,7 @@ function renderTable(){
   }
   // Capacitación no maneja estado: se oculta el filtro de estado en esa sección.
   const mostrarEstado = currentTypeFilter !== 'CAP';
+  const mostrarResponsable = mostrarEstado && currentTypeFilter !== 'AUD' && currentTypeFilter !== 'INSP';
   const statusFilterEl = document.getElementById('statusFilter');
   if(statusFilterEl){
     statusFilterEl.style.display = mostrarEstado ? '' : 'none';
@@ -1274,8 +1276,8 @@ function renderTable(){
       <td class="mono" style="font-size:12px;white-space:nowrap;">${fmtDate(r.fecha)}</td>
       <td class="desc-cell" style="font-size:11.5px;">${((r.titulo||r.descripcion)||'').slice(0,80)}${((r.titulo||r.descripcion)||'').length>80?'…':''}</td>
       ${mostrarEstado ? `<td>${r.tipo==='CAP' ? '<span style="color:var(--graphite-light)">—</span>' : `<div class="status-cell" style="white-space:nowrap;"><span class="status-dot" style="background:${STATUS[r.estado]}"></span>${r.estado}${r.visado ? ' <span title="Visado por Responsable HSQE/DPA" style="color:#1E7A4A;font-weight:bold;">✔</span>' : ''}</div>`}</td>
-      <td class="mono ${isOverdue(r)?'overdue':''}" style="font-size:12px;white-space:nowrap;">${isOverdue(r)?'⚠ ':''}${resumen.vencimiento?fmtDate(resumen.vencimiento):'—'}</td>
-      <td>${resumen.responsable}</td>` : ''}
+      <td class="mono ${isOverdue(r)?'overdue':''}" style="font-size:12px;white-space:nowrap;">${isOverdue(r)?'⚠ ':''}${resumen.vencimiento?fmtDate(resumen.vencimiento):'—'}</td>` : ''}
+      ${mostrarResponsable ? `<td>${resumen.responsable}</td>` : ''}
       <td style="text-align:center">${nAdj>0 ? '📎 '+nAdj : '—'}</td>
       <td style="text-align:center;white-space:nowrap;"><button class="btn" style="padding:4px 8px;font-size:11px;" title="Imprimir PDF" onclick="event.stopPropagation();printRecordPDF('${r.id}')">🖨 PDF</button></td>
     </tr>`;
@@ -1285,7 +1287,7 @@ function renderTable(){
     <table style="font-size:12.5px;">
       <thead><tr>
         <th>ID</th><th>Tipo</th><th>Instalación</th><th>Fecha</th>
-        <th>Título</th>${mostrarEstado ? '<th>Estado</th><th>Vencimiento</th><th>Responsable</th>' : ''}<th>Adj.</th><th></th>
+        <th>Título</th>${mostrarEstado ? '<th>Estado</th><th>Vencimiento</th>' : ''}${mostrarResponsable ? '<th>Responsable</th>' : ''}<th>Adj.</th><th></th>
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
@@ -1305,8 +1307,7 @@ function renderTopbar(){
   }
 }
 function topbarSearch(v){
-  const sb = document.getElementById('searchBox');
-  if(sb) sb.value = v;
+  currentSearch = (v||'').toLowerCase();
   renderTable();
 }
 
@@ -1779,6 +1780,9 @@ function openRecordForm(id){
             <select id="f_estado" onchange="validateEstadoCierre(this)">${Object.keys(STATUS).map(s=>`<option ${r&&r.estado===s?'selected':''}>${s}</option>`).join('')}</select>
           </div>
         </div>
+        <div class="field" id="block_venc_aud" style="display:none;"><label>Fecha de vencimiento</label>
+          <input type="date" id="f_venc_aud" value="${r?r.fecha_vencimiento||'':''}">
+        </div>
         <div class="field"><label>Fecha de cierre (si corresponde)</label>
           <input type="date" id="f_cierre" value="${r?r.fecha_cierre||'':''}">
         </div>
@@ -2171,6 +2175,7 @@ function toggleConditionalFields(){
   document.getElementById('block_cap').style.display = esCap ? 'block' : 'none';
   document.getElementById('block_aud').style.display = esAud ? 'block' : 'none';
   document.getElementById('block_insp').style.display = esInsp ? 'block' : 'none';
+  document.getElementById('block_venc_aud').style.display = (esAud || esInsp) ? 'block' : 'none';
   document.getElementById('block_reportado').style.display = (esCap || esAud || esInsp) ? 'none' : 'block';
   document.getElementById('block_gestion').style.display = (esSug || esCap) ? 'none' : 'block';
   document.getElementById('block_cuasi').style.display = (tipo === 'CUA') ? 'block' : 'none';
@@ -2516,7 +2521,7 @@ async function saveRecord(){
     medio_comunicacion: getIf('f_medio_comunicacion'),
     plazo_comunicacion: getIf('f_plazo_comunicacion'),
     responsable: esSug ? getIf('f_sug_resp') : (tipoSinAcciones ? get('f_responsable') : ''),
-    fecha_vencimiento: esSug ? getIf('f_sug_plazo_seg') : (tipoSinAcciones ? get('f_vencimiento') : ''),
+    fecha_vencimiento: esSug ? getIf('f_sug_plazo_seg') : ((esAud || esInsp) ? getIf('f_venc_aud') : (tipoSinAcciones ? get('f_vencimiento') : '')),
     fecha_cierre: esSug ? getIf('f_sug_cierre') : get('f_cierre'),
     referencia_normativa: get('f_referencia'),
     sug_area: esSug ? getIf('f_sug_area') : '',
