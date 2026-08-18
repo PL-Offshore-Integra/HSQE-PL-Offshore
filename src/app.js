@@ -1228,6 +1228,7 @@ function renderTable(){
   // Capacitación no maneja estado: se oculta el filtro de estado en esa sección.
   const mostrarEstado = currentTypeFilter !== 'CAP';
   const mostrarResponsable = mostrarEstado && currentTypeFilter !== 'AUD' && currentTypeFilter !== 'INSP';
+  const mostrarAlcance = currentTypeFilter === 'AUD';
   const statusFilterEl = document.getElementById('statusFilter');
   if(statusFilterEl){
     statusFilterEl.style.display = mostrarEstado ? '' : 'none';
@@ -1275,6 +1276,7 @@ function renderTable(){
       <td>${r.instalacion||'—'}</td>
       <td class="mono" style="font-size:12px;white-space:nowrap;">${fmtDate(r.fecha)}</td>
       <td class="desc-cell" style="font-size:11.5px;">${((r.titulo||r.descripcion)||'').slice(0,80)}${((r.titulo||r.descripcion)||'').length>80?'…':''}</td>
+      ${mostrarAlcance ? `<td>${r.aud_alcance==='Interna'?'INT':(r.aud_alcance==='Externa'?'EXT':'—')}</td>` : ''}
       ${mostrarEstado ? `<td>${r.tipo==='CAP' ? '<span style="color:var(--graphite-light)">—</span>' : `<div class="status-cell" style="white-space:nowrap;"><span class="status-dot" style="background:${STATUS[r.estado]}"></span>${r.estado}${r.visado ? ' <span title="Visado por Responsable HSQE/DPA" style="color:#1E7A4A;font-weight:bold;">✔</span>' : ''}</div>`}</td>
       <td class="mono ${isOverdue(r)?'overdue':''}" style="font-size:12px;white-space:nowrap;">${isOverdue(r)?'⚠ ':''}${resumen.vencimiento?fmtDate(resumen.vencimiento):'—'}</td>` : ''}
       ${mostrarResponsable ? `<td>${resumen.responsable}</td>` : ''}
@@ -1287,7 +1289,7 @@ function renderTable(){
     <table style="font-size:12.5px;">
       <thead><tr>
         <th>ID</th><th>Tipo</th><th>Instalación</th><th>Fecha</th>
-        <th>Título</th>${mostrarEstado ? '<th>Estado</th><th>Vencimiento</th>' : ''}${mostrarResponsable ? '<th>Responsable</th>' : ''}<th>Adj.</th><th></th>
+        <th>Título</th>${mostrarAlcance ? '<th>INT / EXT</th>' : ''}${mostrarEstado ? '<th>Estado</th><th>Vencimiento</th>' : ''}${mostrarResponsable ? '<th>Responsable</th>' : ''}<th>Adj.</th><th></th>
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
