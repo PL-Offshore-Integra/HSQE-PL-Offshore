@@ -928,8 +928,10 @@ function renderScoreCard(){
 
   const bodyHtml = rows.map(row=>{
     const target = (typeof T[row.key]==='number') ? T[row.key] : (SCORECARD_DEFAULT_TARGETS[row.key] || 0);
-    const qv = quarters.map(q=>row.fn(yIni, q.fin));   // acumulado 01-ene al cierre de cada Q
-    const total = row.fn(yIni, effFin(yFin));          // acumulado hasta hoy
+    // Conteos (NNC): valor propio de cada trimestre (no acumulado). El acumulado va en TOTAL.
+    // Tasas (TRCF/LTIF): acumulado año-a-la-fecha hasta el cierre de cada trimestre.
+    const qv = quarters.map(q => row.kind === 'count' ? row.fn(q.ini, q.fin) : row.fn(yIni, q.fin));
+    const total = row.fn(yIni, effFin(yFin));          // TOTAL: acumulado hasta hoy
 
     // Semaforo: estas KPI son "menor es mejor" (el target es un maximo admisible).
     let bg = '#E9EDF1', dot = '#8B96A1';                       // s/d -> neutro
