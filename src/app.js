@@ -332,16 +332,16 @@ async function loadData(){
     DATA.companies = (cfgRes.data && cfgRes.data.data && Array.isArray(cfgRes.data.data.companies)) ? cfgRes.data.data.companies : [];
     DATA.scorecardTargets = (cfgRes.data && cfgRes.data.data && cfgRes.data.data.scorecardTargets) ? cfgRes.data.data.scorecardTargets : {};
     DATA.visadores = (cfgRes.data && cfgRes.data.data && Array.isArray(cfgRes.data.data.visadores)) ? cfgRes.data.data.visadores : [];
-    // Migración: correos de visadores movidos de @paranalogistica.com.ar a @ploffshore.com
-    const REMAP_VISADORES = { 'emartinez@paranalogistica.com.ar':'emartinez@ploffshore.com', 'mpadilla@paranalogistica.com.ar':'mpadilla@ploffshore.com' };
-    let visadoresRemap = false;
-    DATA.visadores = DATA.visadores.map(v => {
-      const nuevo = REMAP_VISADORES[(v.email||'').trim().toLowerCase()];
-      if(nuevo){ visadoresRemap = true; return { ...v, email: nuevo }; }
-      return v;
-    });
+    // Migración: si quedan visadores con el dominio viejo, se deja la lista definitiva con los dos de ploffshore.
+    const tieneViejos = DATA.visadores.some(v => /@paranalogistica\.com\.ar$/i.test((v.email||'').trim()));
+    if(tieneViejos){
+      DATA.visadores = [
+        { email: 'emartinez@ploffshore.com', nombre: 'Emmanuel Martinez', cargo: 'Gte. HSQE/DPA' },
+        { email: 'mpadilla@ploffshore.com', nombre: 'M. Padilla', cargo: 'HSQE/DPA' },
+      ];
+    }
     if(DATA.visadores.length === 0){ DATA.visadores = VISADORES_DEFAULT.map(v=>({...v})); await saveConfig(); }
-    else if(visadoresRemap){ await saveConfig(); }
+    else if(tieneViejos){ await saveConfig(); }
     if(DATA.companies.length === 0){ seedDefaults(); await saveConfig(); }
   }catch(e){
     console.error('Error cargando datos HSQE:', e && e.message ? e.message : e);
