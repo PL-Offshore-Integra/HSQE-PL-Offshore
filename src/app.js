@@ -711,7 +711,28 @@ function renderKPIs(){
 const OCIMF_EXPOSURE_CREW = 12;
 const OCIMF_HOURS_PER_DAY = 24;
 const OCIMF_MULTIPLIER = 1000000;
-const SCORECARD_DEFAULT_TARGETS = { trcf:20, ltif:20, nnc_cia_ext:4, nnc_cia_int:4, nnc_buq_ext:4, nnc_buq_int:4 };
+const SCORECARD_DEFAULT_TARGETS = { trcf:20, ltif:20, nnc_cia_ext:4, nnc_cia_int:4, nnc_buq_ext:4, nnc_buq_int:4, cap_hsqe_buq:4 };
+// Tipificación de sitios: cuáles son buques (para KPIs por ámbito). Se define en el catálogo.
+function ensureSitiosTipo(){
+  const co = DATA.companies[0];
+  if(!co) return;
+  if(!co.sitiosTipo || typeof co.sitiosTipo !== 'object') co.sitiosTipo = {};
+  (co.vessels||[]).forEach(v => {
+    if(!(v in co.sitiosTipo)) co.sitiosTipo[v] = /atlantic dama|golondrina de mar/i.test(v) ? 'Buque' : 'Oficina';
+  });
+}
+function sitioTipo(nombre){ const co = DATA.companies[0]; return (co && co.sitiosTipo && co.sitiosTipo[nombre]) || 'Oficina'; }
+function sitioEsBuque(nombre){ return sitioTipo(nombre) === 'Buque'; }
+async function updateSitioTipo(nombre, tipo){
+  const co = DATA.companies[0];
+  if(!co) return;
+  if(!co.sitiosTipo) co.sitiosTipo = {};
+  co.sitiosTipo[nombre] = tipo;
+  await saveData();
+  renderCatalogManager();
+  renderAll();
+  showToast('Guardado');
+}
 
 function daysBetweenInclusive(desde, hasta){
   if(!desde || !hasta) return 0;
@@ -897,6 +918,11 @@ function renderScoreCard(){
   // Misma logica y fuente que los paneles de arriba (respeta el filtro Sitio/Buque).
   const accAll = filteredRecords(true).filter(r => r.tipo==='ACC' && r.incluir_kpi);
   const ncAll  = filteredRecords(true).filter(r => r.tipo==='NC');
+  const capAll = filteredRecords(true).filter(r => r.tipo==='CAP');
+  ensureSitiosTipo();
+  const capCount = (tipoCap, ini, fin) => (fin < ini) ? 0 : capAll.filter(r =>
+    r.fecha>=ini && r.fecha<=fin && (r.cap_tipo||'') === tipoCap && sitioEsBuque(r.instalacion)
+  ).length;
 
   // Tasa OCIMF: null (s/d) si no hay exposicion cargada en ese periodo.
   const rate = (prefijos, ini, fin) => {
@@ -921,6 +947,7 @@ function renderScoreCard(){
     { key:'nnc_cia_int', kpi:'NNC Cia en Aud. Internas ISM - ISO', kind:'count', fn:(i,f)=>ncCount(['ISM','ISO'],'Interna','Oficina',i,f) },
     { key:'nnc_buq_ext', kpi:'NNC Buques en Aud. Externas ISM',    kind:'count', fn:(i,f)=>ncCount(['ISM'],'Externa','Buques',i,f) },
     { key:'nnc_buq_int', kpi:'NNC Buques en Aud. Internas ISM',    kind:'count', fn:(i,f)=>ncCount(['ISM'],'Interna','Buques',i,f) },
+    { key:'cap_hsqe_buq', kpi:'Capacitaciones HSQE en buques',     kind:'count', dir:'max', fn:(i,f)=>capCount('HSQE',i,f) },
   ];
 
   const fmt = v => v===null ? 's/d' : (Number.isInteger(v) ? String(v) : v.toFixed(2));
@@ -936,24 +963,27 @@ function renderScoreCard(){
       ? qv.reduce((a,b)=> a + (b||0), 0)
       : row.fn(yIni, effFin(yFin));
 
-    // Semaforo TOTAL: verde=sin registros, amarillo=hay registros pero cumple (atención), rojo=supera el target.
-    let bg = '#E9EDF1', dot = '#8B96A1';                       // s/d -> neutro
-    if(total !== null){
-      if(total > target){ bg = '#F3C9C9'; dot = '#C0392B'; }        // no cumple
-      else if(total > 0){ bg = '#FCE9A6'; dot = '#B07D0A'; }        // cumple pero hay registros -> atención
-      else { bg = '#CDE9CE'; dot = '#1E7A4A'; }                     // sin registros -> ok
-    }
+    // Semáforo. dir 'min' (NNC/tasas): menos es mejor. dir 'max' (capacitaciones): más es mejor.
+    // Verde=ok · Amarillo=atención · Rojo=no cumple.
+    const semaforo = (val, tgt, dir) => {
+      if(val === null) return { bg:'#E9EDF1', dot:'#8B96A1' };
+      if(dir === 'max'){
+        if(val >= tgt) return { bg:'#CDE9CE', dot:'#1E7A4A' };   // llega al target
+        if(val > 0)    return { bg:'#FCE9A6', dot:'#B07D0A' };   // hay algunas pero faltan
+        return { bg:'#F3C9C9', dot:'#C0392B' };                  // ninguna
+      }
+      if(val > tgt)  return { bg:'#F3C9C9', dot:'#C0392B' };      // supera el máximo admisible
+      if(val > 0)    return { bg:'#FCE9A6', dot:'#B07D0A' };      // hay registros pero cumple
+      return { bg:'#CDE9CE', dot:'#1E7A4A' };                     // sin registros
+    };
+    const { bg, dot } = semaforo(total, target, row.dir);
 
     // Resultado del ano anterior (ano completo) + semaforo contra el target de ESE ano.
     const py = y - 1;
     const prevTotal = row.fn(`${py}-01-01`, effFin(`${py}-12-31`));
     const prevT = DATA.scorecardTargets[String(py)] || SCORECARD_DEFAULT_TARGETS;
     const prevTarget = (typeof prevT[row.key]==='number') ? prevT[row.key] : (SCORECARD_DEFAULT_TARGETS[row.key] || 0);
-    let pbg = '#E9EDF1', pdot = '#8B96A1';
-    if(prevTotal !== null){
-      if(prevTotal <= prevTarget){ pbg = '#CDE9CE'; pdot = '#1E7A4A'; }
-      else { pbg = '#F3C9C9'; pdot = '#C0392B'; }
-    }
+    const { bg: pbg, dot: pdot } = semaforo(prevTotal, prevTarget, row.dir);
 
     const qCells = qv.map(v=>`<td style="text-align:center;padding:7px 8px;border:1px solid #DBE0E6;">${fmt(v)}</td>`).join('');
     return `<tr>
@@ -2907,10 +2937,18 @@ function sitiosSectionHtml(){
       </div>
     </div>
     <div class="section-title">Sitios / Buques</div>
-    <div style="font-size:11px;color:var(--graphite-light);margin:-4px 0 8px;">Se usan para filtrar la plataforma y para el reporte PDF por sitio.</div>
-    <div class="badge-strip" style="margin-bottom:8px;">
+    <div style="font-size:11px;color:var(--graphite-light);margin:-4px 0 8px;">Se usan para filtrar la plataforma y para el reporte PDF por sitio. Marcá cuáles son <b>Buque</b> para los KPI por ámbito (ej. Capacitaciones HSQE en buques).</div>
+    ${(ensureSitiosTipo(),'')}
+    <div style="margin-bottom:8px;">
       ${c.vessels.length===0 ? '<span style="font-size:12px;color:var(--graphite-light)">Sin sitios/buques cargados.</span>' :
-        c.vessels.map((v,vi)=>`<span class="sev-tag" style="background:var(--paper-dark);color:var(--navy);">${v} <span style="cursor:pointer;color:var(--red)" onclick="removeVessel(0,${vi})">✕</span></span>`).join('')}
+        c.vessels.map((v,vi)=>`
+        <div style="display:flex;gap:10px;align-items:center;margin-bottom:6px;">
+          <span style="flex:1;font-size:13px;color:var(--navy);">${v}</span>
+          <select onchange="updateSitioTipo('${v.replace(/'/g,"\\'")}', this.value)" style="width:auto;flex:0 0 110px;">
+            ${['Oficina','Buque'].map(t=>`<option value="${t}" ${sitioTipo(v)===t?'selected':''}>${t}</option>`).join('')}
+          </select>
+          <button class="btn secondary" style="padding:6px 10px;color:var(--red);" onclick="removeVessel(0,${vi})">✕</button>
+        </div>`).join('')}
     </div>
     <div class="field-row">
       <input type="text" id="newVessel_0" placeholder="Nuevo sitio/buque">
@@ -3732,7 +3770,7 @@ async function printRecordPDF(id){
 }
 
 /* ============ INIT ============ */
-Object.assign(window, { addAccion, addAttachmentFile, addAttachmentManual, addCatalogItem, addDotacionMes, addInvestigador, addLeccion, addCapParticipante, addHallazgo, addObservacion, addVessel, addVisador, clearFilters, closeModal, deleteRecord, exportData, printRecordPDF, openAttachment, openCatalogManager, openRecordForm, openVisadoresManager, printChartsReport, printCompanyReport, removeAccion, removeAttachment, removeCatalogItem, removeDotacionMes, removeInvestigador, removeLeccion, removeCapParticipante, removeHallazgo, removeObservacion, removeVessel, removeVisador, renderAll, renderTopbar, topbarSearch, renderAuditNcKpi, renderOcimfKpi, renderScoreCard, setScoreCardYear, setScoreCardTarget, renderTable, saveRecord, setCompanyLogo, setSiteFilter, setClienteFilter, setTypeFilter, toggleCategoriaOtro, toggleTipificacionCausaOtro, toggleVisado, updateAccionField, updateInvestigadorField, updateCapParticipanteField, updateHallazgoField, updateObservacionField, updateVesselOptions, updateCargoField, addCargo, removeCargo, validateEstadoCierre, refreshData, logoutHsqe });
+Object.assign(window, { addAccion, addAttachmentFile, addAttachmentManual, addCatalogItem, addDotacionMes, addInvestigador, addLeccion, addCapParticipante, addHallazgo, addObservacion, addVessel, addVisador, clearFilters, closeModal, deleteRecord, exportData, printRecordPDF, openAttachment, openCatalogManager, openRecordForm, openVisadoresManager, printChartsReport, printCompanyReport, removeAccion, removeAttachment, removeCatalogItem, removeDotacionMes, removeInvestigador, removeLeccion, removeCapParticipante, removeHallazgo, removeObservacion, removeVessel, removeVisador, renderAll, renderTopbar, topbarSearch, renderAuditNcKpi, renderOcimfKpi, renderScoreCard, setScoreCardYear, setScoreCardTarget, renderTable, saveRecord, setCompanyLogo, updateSitioTipo, setSiteFilter, setClienteFilter, setTypeFilter, toggleCategoriaOtro, toggleTipificacionCausaOtro, toggleVisado, updateAccionField, updateInvestigadorField, updateCapParticipanteField, updateHallazgoField, updateObservacionField, updateVesselOptions, updateCargoField, addCargo, removeCargo, validateEstadoCierre, refreshData, logoutHsqe });
 
 async function logoutHsqe(){
   await supabase.auth.signOut();
