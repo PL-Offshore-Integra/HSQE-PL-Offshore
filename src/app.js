@@ -931,7 +931,10 @@ function renderScoreCard(){
     // Conteos (NNC): valor propio de cada trimestre (no acumulado). El acumulado va en TOTAL.
     // Tasas (TRCF/LTIF): acumulado año-a-la-fecha hasta el cierre de cada trimestre.
     const qv = quarters.map(q => row.kind === 'count' ? row.fn(q.ini, q.fin) : row.fn(yIni, q.fin));
-    const total = row.fn(yIni, effFin(yFin));          // TOTAL: acumulado hasta hoy
+    // Conteos (NNC): el TOTAL es la suma de los 4 trimestres. Tasas: acumulado hasta hoy.
+    const total = row.kind === 'count'
+      ? qv.reduce((a,b)=> a + (b||0), 0)
+      : row.fn(yIni, effFin(yFin));
 
     // Semaforo: estas KPI son "menor es mejor" (el target es un maximo admisible).
     let bg = '#E9EDF1', dot = '#8B96A1';                       // s/d -> neutro
