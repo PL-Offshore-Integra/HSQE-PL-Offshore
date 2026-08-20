@@ -1026,8 +1026,9 @@ function getChartSpecs(list, tipo){
   if(tipo === 'ALL'){
     const tipoLabels = NAV_ORDER_ALL_TYPES.filter(k=>TYPES[k]);
     return { scope:'Todos los registros — diversidad de categorías', specs: [
-      { title:'Registros por tipo', kind:'bar', indexAxis:'y', labels: tipoLabels.map(k=>TYPES[k].label),
-        data: tipoLabels.map(k=>list.filter(r=>r.tipo===k).length), colors: tipoLabels.map(k=>navDotColor(k)) },
+      { title:'Registros por tipo', kind:'bar', labels: tipoLabels.map(k=>TYPES[k].label),
+        data: tipoLabels.map(k=>list.filter(r=>r.tipo===k).length), colors: tipoLabels.map(k=>navDotColor(k)),
+        valMax: 30, valStep: 5 },
       specEstado, specInstalacion, specCausaRaiz,
     ]};
   }
@@ -1192,7 +1193,7 @@ function renderCharts(){
         indexAxis: spec.indexAxis || 'x',
         plugins:{legend:{display:false}},
         scales:{
-          [valAxis]:{ beginAtZero:true, ticks:{precision:0} },
+          [valAxis]:{ beginAtZero:true, ticks:{precision:0, ...(spec.valStep?{stepSize:spec.valStep}:{})}, ...(spec.valMax?{max:spec.valMax}:{}) },
           [catAxis]:{ ticks:{
             autoSkip:false,
             font:{size:10},
