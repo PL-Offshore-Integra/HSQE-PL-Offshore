@@ -1028,7 +1028,7 @@ function getChartSpecs(list, tipo){
     return { scope:'Todos los registros — diversidad de categorías', specs: [
       { title:'Registros por tipo', kind:'bar', labels: tipoLabels.map(k=>TYPES[k].label),
         data: tipoLabels.map(k=>list.filter(r=>r.tipo===k).length), colors: tipoLabels.map(k=>navDotColor(k)),
-        valMax: 30, valStep: 5 },
+        valMax: 30, valStep: 5, clickKeys: tipoLabels },
       specEstado, specInstalacion, specCausaRaiz,
     ]};
   }
@@ -1203,6 +1203,19 @@ function renderCharts(){
       };
     }
 
+    if(spec.clickKeys){
+      opts.onClick = (evt, elements) => {
+        if(elements && elements.length){
+          const key = spec.clickKeys[elements[0].index];
+          if(key && TYPES[key]) setTypeFilter(key);
+        }
+      };
+      opts.onHover = (evt, elements) => {
+        const c = evt && evt.native && evt.native.target;
+        if(c) c.style.cursor = (elements && elements.length) ? 'pointer' : 'default';
+      };
+    }
+
     charts[chartKeys[i]] = new Chart(canvas, {
       type: spec.kind,
       data: { labels: spec.labels, datasets:[{ data: spec.data, backgroundColor: spec.colors.length>1 ? spec.colors : spec.labels.map((_,j)=>spec.colors[j % spec.colors.length]), borderRadius: spec.kind==='bar'?2:0 }] },
@@ -1323,7 +1336,7 @@ function renderBrandLogo(){
   if(!co){ el.innerHTML = ''; return; }
   // Barra lateral ahora es blanca (estilo portal): se usa el logo azul, sin caja.
   const logo = getCompanyLogo(co.id);
-  el.innerHTML = logo ? `<img src="${logo}" style="display:block;max-height:48px;max-width:190px;margin-bottom:10px;">` : '';
+  el.innerHTML = logo ? `<img src="${logo}" onclick="setTypeFilter('ALL')" title="Ir a todos los registros" style="display:block;max-height:48px;max-width:190px;margin-bottom:10px;cursor:pointer;">` : '';
 }
 // Alterna entre el panel normal (KPIs, graficos, tabla) y la vista dedicada "KPI HSQE".
 // El encabezado con el boton de impresion queda SIEMPRE visible; solo cambian sus textos.
