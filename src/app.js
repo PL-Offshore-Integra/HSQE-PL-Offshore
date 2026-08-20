@@ -1152,6 +1152,8 @@ function renderCharts(){
 
   const { scope, specs } = getChartSpecs(list, currentTypeFilter);
   document.getElementById('chartsSectionLabel').textContent = `Gráficos — ${scope}`;
+  const chartsRow = document.getElementById('chartsMainRow');
+  if(chartsRow) chartsRow.classList.toggle('charts-all', currentTypeFilter === 'ALL');
 
   const canvasIds = ['chartTipo','chartEstado','chartEmpresa','chartCausa'];
   const titleIds = ['chartTitle1','chartTitle2','chartTitle3','chartTitle4'];
@@ -3098,7 +3100,7 @@ async function printChartsReport(){
   ];
   let chartsHtml = '';
   if(!kpiMode){
-    chartsHtml = '<div class="chart-row">';
+    chartsHtml = `<div class="chart-row${currentTypeFilter === 'ALL' ? ' charts-all' : ''}">`;
     chartDefs.forEach(cd=>{
       const canvasEl = document.getElementById(cd.canvas);
       const title = document.getElementById(cd.titleEl).textContent;
