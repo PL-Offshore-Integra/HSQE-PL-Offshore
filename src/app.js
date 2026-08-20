@@ -6,7 +6,7 @@ import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 
 /* ============ CONFIG ============ */
 const TYPES = {
-  NC:  {label:'No Conformidad',      color:'#7A3B9E'},
+  NC:  {label:'No Conformidad',      color:'#E67E22'},
   OBS: {label:'Observación',         color:'#2C7FB8'},
   OM:  {label:'Oportunidad de Mejora', color:'#4C8C4A'},
   LA:  {label:'Lección Aprendida',   color:'#2C8C6B'},
