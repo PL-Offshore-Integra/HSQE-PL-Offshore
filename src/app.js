@@ -936,11 +936,12 @@ function renderScoreCard(){
       ? qv.reduce((a,b)=> a + (b||0), 0)
       : row.fn(yIni, effFin(yFin));
 
-    // Semaforo: estas KPI son "menor es mejor" (el target es un maximo admisible).
+    // Semaforo TOTAL: verde=sin registros, amarillo=hay registros pero cumple (atención), rojo=supera el target.
     let bg = '#E9EDF1', dot = '#8B96A1';                       // s/d -> neutro
     if(total !== null){
-      if(total <= target){ bg = '#CDE9CE'; dot = '#1E7A4A'; }  // cumple
-      else { bg = '#F3C9C9'; dot = '#C0392B'; }                // no cumple
+      if(total > target){ bg = '#F3C9C9'; dot = '#C0392B'; }        // no cumple
+      else if(total > 0){ bg = '#FCE9A6'; dot = '#B07D0A'; }        // cumple pero hay registros -> atención
+      else { bg = '#CDE9CE'; dot = '#1E7A4A'; }                     // sin registros -> ok
     }
 
     // Resultado del ano anterior (ano completo) + semaforo contra el target de ESE ano.
@@ -998,7 +999,7 @@ function renderScoreCard(){
         <tbody>${bodyHtml}</tbody>
       </table>
       <div style="padding:8px 14px;font-size:11px;color:#5B6671;background:#F7F9FB;border-top:1px solid #DBE0E6;">
-        🟢 cumple el target &nbsp;·&nbsp; 🔴 no cumple (valor mayor al target) &nbsp;·&nbsp; el Target es editable por fila &nbsp;·&nbsp; s/d = sin exposición cargada
+        🟢 sin registros &nbsp;·&nbsp; 🟡 cumple el target pero hay registros (atención) &nbsp;·&nbsp; 🔴 no cumple (valor mayor al target) &nbsp;·&nbsp; el Target es editable por fila &nbsp;·&nbsp; s/d = sin exposición cargada
       </div>
     </div>`;
 }
