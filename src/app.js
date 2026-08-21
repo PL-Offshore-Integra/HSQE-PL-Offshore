@@ -3711,10 +3711,14 @@ async function printRecordPDF(id){
             const img = esPng ? await outDoc.embedPng(file.bytes) : await outDoc.embedJpg(file.bytes);
             const pg = outDoc.addPage(A4);
             drawAnexoHeader(pg, helv, i+1, a.nombre, '');
-            const top = 780, maxW = A4[0] - M*2, maxH = top - M;
-            const s = Math.min(maxW / img.width, maxH / img.height, 1);
+            const topLimite = A4[1] - 92;              // debajo del título y la línea del encabezado
+            const areaH = topLimite - M;               // alto disponible hasta el margen inferior
+            const maxW = A4[0] - M*2;
+            const s = Math.min(maxW / img.width, areaH / img.height, 1);
             const w = img.width * s, h = img.height * s;
-            pg.drawImage(img, { x:(A4[0]-w)/2, y:(top - h), width:w, height:h });
+            const x = (A4[0] - w) / 2;                  // centrado horizontal
+            const y = M + (areaH - h) / 2;             // centrado vertical en el área disponible
+            pg.drawImage(img, { x, y, width:w, height:h });
           } else {
             drawAnexoHeader(outDoc.addPage(A4), helv, i+1, a.nombre, 'Formato no soportado como anexo (solo PDF, JPG o PNG).');
           }
