@@ -1409,8 +1409,8 @@ function renderAccionesPanel(){
   const dotColor = (e) => esCerrado(e) ? '#1E7A4A' : (normalizeEstado(e)==='En Proceso' ? '#B07D0A' : '#C0392B');
   const rows = filas.map(f=>{
     const vencida = !esCerrado(f.estado) && f.venc && f.venc < hoy;
-    return `<tr>
-      <td><span class="id-tag" style="cursor:pointer;" onclick="openRecordForm('${f.id}')" title="Abrir registro">${f.cod}</span></td>
+    return `<tr style="cursor:pointer;" onclick="openRecordForm('${f.id}')" title="Abrir registro para editar">
+      <td><span class="id-tag">${f.cod}</span></td>
       <td>${f.tipoAcc}</td>
       <td class="desc-cell" style="font-size:11.5px;">${(f.desc||'').slice(0,120)}${(f.desc||'').length>120?'…':''}</td>
       <td>${f.resp}</td>
@@ -1448,6 +1448,9 @@ function setKpiViewMode(kpiMode){
   if(kpiMode){
     if(label) label.textContent = 'Indicadores KPI';
     if(printBtn) printBtn.textContent = '\uD83D\uDDA8 Imprimir KPI (PDF)';
+  } else if(accMode){
+    if(label) label.textContent = 'Plan de acciones';
+    if(printBtn) printBtn.textContent = '\uD83D\uDDA8 Imprimir plan de acciones (PDF)';
   } else if(printBtn){
     printBtn.textContent = '\uD83D\uDDA8 Imprimir graficos (PDF)';
   }
@@ -3168,6 +3171,55 @@ async function printChartsReport(){
   const fechaHora = now.toLocaleDateString('es-AR') + ' ' + now.toLocaleTimeString('es-AR', {hour:'2-digit', minute:'2-digit'});
   const co = DATA.companies[0] || null;
   const logo = co ? getCompanyLogo(co.id) : null;
+
+  if(currentTypeFilter === 'ACCIONES'){
+    const site = currentSiteFilter;
+    const filas = [];
+    DATA.records.forEach(r=>{
+      if(site!=='ALL' && r.instalacion!==site) return;
+      const push=(a,t)=>{ if(a&&(a.descripcion||'').trim()) filas.push({cod:codigoMostrado(r),t,desc:a.descripcion,resp:a.responsable||'—',venc:a.vencimiento||'',estado:a.estado||'—',cerr:esCerrado(a.estado)}); };
+      (r.acciones_correctivas||[]).forEach(a=>push(a,'Correctiva'));
+      (r.acciones_preventivas||[]).forEach(a=>push(a,'Preventiva'));
+    });
+    filas.sort((a,b)=>{ if(a.cerr!==b.cerr) return a.cerr?1:-1; return (a.venc||'9999-99-99').localeCompare(b.venc||'9999-99-99'); });
+    const hoy = todayISO();
+    const th = (t) => `<th style="border:1px solid #DBE0E6;padding:5px 7px;background:#F2F5F8;text-align:left;">${t}</th>`;
+    const filasHtml = filas.map(f=>{
+      const vencida = !f.cerr && f.venc && f.venc<hoy;
+      return `<tr>
+        <td style="border:1px solid #DBE0E6;padding:5px 7px;font-family:'IBM Plex Mono',monospace;font-size:8.5pt;">${f.cod}</td>
+        <td style="border:1px solid #DBE0E6;padding:5px 7px;">${f.t}</td>
+        <td style="border:1px solid #DBE0E6;padding:5px 7px;">${f.desc||'—'}</td>
+        <td style="border:1px solid #DBE0E6;padding:5px 7px;">${f.resp}</td>
+        <td style="border:1px solid #DBE0E6;padding:5px 7px;white-space:nowrap;color:${vencida?'#C0392B':'#333'};">${vencida?'⚠ ':''}${f.venc?fmtDate(f.venc):'—'}</td>
+        <td style="border:1px solid #DBE0E6;padding:5px 7px;">${f.estado}</td>
+      </tr>`;
+    }).join('');
+    container.innerHTML = `<div class="pr-record">
+      <table style="width:100%;border-collapse:collapse;margin-bottom:14px;">
+        <tr>
+          <td style="width:70%;vertical-align:middle;border-bottom:3px solid #002247;padding-bottom:8px;">
+            <div class="pr-title">INTEGRA · MÓDULO HSQE — PLAN DE ACCIONES <span style="font-style:italic;color:#9AA6B2;font-weight:normal;font-size:13px;">· Action plan</span></div>
+            <div class="pr-sub">${co?co.name:''}${currentSiteFilter!=='ALL' ? ' — '+currentSiteFilter : ''} · ${filas.length} acción(es) · Generado el ${fechaHora}</div>
+          </td>
+          <td style="width:30%;text-align:right;">${logo?`<img src="${logo}" style="max-height:60px;max-width:160px;">`:''}</td>
+        </tr>
+      </table>
+      <table style="width:100%;border-collapse:collapse;font-size:9pt;">
+        <tr>${th('Registro')}${th('Tipo')}${th('Descripción')}${th('Responsable')}${th('Vencimiento')}${th('Estado')}</tr>
+        ${filasHtml || '<tr><td colspan="6" style="border:1px solid #DBE0E6;padding:12px;text-align:center;color:#8B96A1;">Sin acciones cargadas.</td></tr>'}
+      </table>
+    </div>`;
+    const imgs = Array.from(container.querySelectorAll('img'));
+    try{ await Promise.all(imgs.map(img => (img.complete && img.naturalWidth>0) ? Promise.resolve() : (img.decode ? img.decode().catch(()=>{}) : new Promise(res=>{img.onload=res;img.onerror=res;})))); }catch(e){}
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    let orient = document.getElementById('__pageOrient');
+    if(!orient){ orient = document.createElement('style'); orient.id='__pageOrient'; document.head.appendChild(orient); }
+    orient.textContent = '@page{ size: A4 landscape; margin: 14mm 12mm; }';
+    window.print();
+    return;
+  }
+
   const kpiMode = currentTypeFilter === 'KPI';
   const scopeLabel = kpiMode ? 'KPI HSQE' : document.getElementById('chartsSectionLabel').textContent;
   const scoreEl = document.getElementById('scoreCardTable');
