@@ -274,6 +274,7 @@ const PARTE_CUERPO = ['',
 
 let modalAttachments = [];
 let modalLecciones = [];
+let accCharts = { venc:null, resp:null };
 let modalHallazgos = [];
 let modalObservaciones = [];
 let modalInvestigadores = [];
@@ -1395,20 +1396,29 @@ function renderAccionesPanel(){
     if(site !== 'ALL' && r.instalacion !== site) return;
     const push = (a, tipoAcc) => {
       if(!a || !(a.descripcion||'').trim()) return;
+      if(esCerrado(a.estado)) return; // solo abiertas / en proceso
       filas.push({ id:r.id, cod:codigoMostrado(r), tipoAcc, desc:a.descripcion, resp:a.responsable||'—', venc:a.vencimiento||'', estado:a.estado||'—' });
     };
     (r.acciones_correctivas||[]).forEach(a=>push(a,'Correctiva'));
     (r.acciones_preventivas||[]).forEach(a=>push(a,'Preventiva'));
   });
-  filas.sort((a,b)=>{
-    const ac = esCerrado(a.estado), bc = esCerrado(b.estado);
-    if(ac !== bc) return ac ? 1 : -1;
-    return (a.venc||'9999-99-99').localeCompare(b.venc||'9999-99-99');
-  });
+  filas.sort((a,b)=>(a.venc||'9999-99-99').localeCompare(b.venc||'9999-99-99'));
   const hoy = todayISO();
+  const limite = new Date(); limite.setDate(limite.getDate()+30); const limiteISO = limite.toISOString().slice(0,10);
+  // Datos para gráficos
+  let venc=0, porVencer=0, enPlazo=0;
+  const porResp = {};
+  filas.forEach(f=>{
+    if(f.venc && f.venc < hoy) venc++;
+    else if(f.venc && f.venc <= limiteISO) porVencer++;
+    else enPlazo++;
+    const k = (f.resp||'—').trim() || '—';
+    porResp[k] = (porResp[k]||0) + 1;
+  });
+  const respLabels = Object.keys(porResp).sort((a,b)=>porResp[b]-porResp[a]);
   const dotColor = (e) => esCerrado(e) ? '#1E7A4A' : (normalizeEstado(e)==='En Proceso' ? '#B07D0A' : '#C0392B');
   const rows = filas.map(f=>{
-    const vencida = !esCerrado(f.estado) && f.venc && f.venc < hoy;
+    const vencida = f.venc && f.venc < hoy;
     return `<tr style="cursor:pointer;" onclick="openRecordForm('${f.id}')" title="Abrir registro para editar">
       <td><span class="id-tag">${f.cod}</span></td>
       <td>${f.tipoAcc}</td>
@@ -1419,11 +1429,35 @@ function renderAccionesPanel(){
     </tr>`;
   }).join('');
   panel.innerHTML = `
-    <div style="font-size:12px;color:var(--graphite);margin-bottom:10px;">${filas.length} acción(es) — solo consulta. Tocá el código para abrir el registro y tratarla.</div>
+    <div class="chart-row" style="grid-template-columns:1fr 1fr;">
+      <div class="chart-card"><h3>Acciones por vencimiento</h3><div style="height:220px;"><canvas id="accChartVenc"></canvas></div></div>
+      <div class="chart-card"><h3>Acciones por responsable</h3><div style="height:${Math.max(220, respLabels.length*30+40)}px;"><canvas id="accChartResp"></canvas></div></div>
+    </div>
+    <div style="font-size:12px;color:var(--graphite);margin-bottom:10px;">${filas.length} acción(es) abiertas / en proceso — solo consulta. Tocá una fila para abrir el registro y tratarla.</div>
     <div id="tableWrapAcciones"><table>
       <thead><tr><th>Registro</th><th>Tipo</th><th>Descripción</th><th>Responsable</th><th>Vencimiento</th><th>Estado</th></tr></thead>
-      <tbody>${rows || '<tr><td colspan="6" style="text-align:center;color:var(--graphite-light);padding:20px;">Sin acciones cargadas.</td></tr>'}</tbody>
+      <tbody>${rows || '<tr><td colspan="6" style="text-align:center;color:var(--graphite-light);padding:20px;">No hay acciones abiertas ni en proceso.</td></tr>'}</tbody>
     </table></div>`;
+
+  // Gráficos (se destruyen los previos para evitar duplicados)
+  if(accCharts.venc){ accCharts.venc.destroy(); accCharts.venc = null; }
+  if(accCharts.resp){ accCharts.resp.destroy(); accCharts.resp = null; }
+  const cVenc = document.getElementById('accChartVenc');
+  if(cVenc){
+    accCharts.venc = new Chart(cVenc, {
+      type:'doughnut',
+      data:{ labels:['Vencidas','Por vencer (30 días)','En plazo'], datasets:[{ data:[venc, porVencer, enPlazo], backgroundColor:['#C0392B','#B07D0A','#1E7A4A'], borderWidth:0 }] },
+      options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'bottom', labels:{ font:{ size:11 } } } } }
+    });
+  }
+  const cResp = document.getElementById('accChartResp');
+  if(cResp){
+    accCharts.resp = new Chart(cResp, {
+      type:'bar',
+      data:{ labels:respLabels, datasets:[{ data:respLabels.map(k=>porResp[k]), backgroundColor:'#002247', borderRadius:3 }] },
+      options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:false } }, scales:{ x:{ beginAtZero:true, ticks:{ precision:0 } } } }
+    });
+  }
 }
 
 function setKpiViewMode(kpiMode){
@@ -3177,15 +3211,15 @@ async function printChartsReport(){
     const filas = [];
     DATA.records.forEach(r=>{
       if(site!=='ALL' && r.instalacion!==site) return;
-      const push=(a,t)=>{ if(a&&(a.descripcion||'').trim()) filas.push({cod:codigoMostrado(r),t,desc:a.descripcion,resp:a.responsable||'—',venc:a.vencimiento||'',estado:a.estado||'—',cerr:esCerrado(a.estado)}); };
+      const push=(a,t)=>{ if(a&&(a.descripcion||'').trim() && !esCerrado(a.estado)) filas.push({cod:codigoMostrado(r),t,desc:a.descripcion,resp:a.responsable||'—',venc:a.vencimiento||'',estado:a.estado||'—'}); };
       (r.acciones_correctivas||[]).forEach(a=>push(a,'Correctiva'));
       (r.acciones_preventivas||[]).forEach(a=>push(a,'Preventiva'));
     });
-    filas.sort((a,b)=>{ if(a.cerr!==b.cerr) return a.cerr?1:-1; return (a.venc||'9999-99-99').localeCompare(b.venc||'9999-99-99'); });
+    filas.sort((a,b)=>(a.venc||'9999-99-99').localeCompare(b.venc||'9999-99-99'));
     const hoy = todayISO();
     const th = (t) => `<th style="border:1px solid #DBE0E6;padding:5px 7px;background:#F2F5F8;text-align:left;">${t}</th>`;
     const filasHtml = filas.map(f=>{
-      const vencida = !f.cerr && f.venc && f.venc<hoy;
+      const vencida = f.venc && f.venc<hoy;
       return `<tr>
         <td style="border:1px solid #DBE0E6;padding:5px 7px;font-family:'IBM Plex Mono',monospace;font-size:8.5pt;">${f.cod}</td>
         <td style="border:1px solid #DBE0E6;padding:5px 7px;">${f.t}</td>
