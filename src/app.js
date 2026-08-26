@@ -611,6 +611,11 @@ function renderTypeNav(){
   html += `<div class="nav-item ${currentTypeFilter==='KPI'?'active':''}" onclick="setTypeFilter('KPI')">
     <span class="nav-dot" style="background:#2ECC71"></span>KPI HSQE
   </div>`;
+  const totalAcciones = DATA.records.reduce((n,r)=> n + (r.acciones_correctivas||[]).filter(a=>(a.descripcion||'').trim()).length + (r.acciones_preventivas||[]).filter(a=>(a.descripcion||'').trim()).length, 0);
+  html += `<div class="nav-item ${currentTypeFilter==='ACCIONES'?'active':''}" onclick="setTypeFilter('ACCIONES')">
+    <span class="nav-dot" style="background:#5B6671"></span>Plan de acciones
+    <span class="nav-count">${totalAcciones}</span>
+  </div>`;
   wrap.innerHTML = html;
 }
 function navItem(key, label, color, count){
@@ -1376,7 +1381,54 @@ function renderBrandLogo(){
 }
 // Alterna entre el panel normal (KPIs, graficos, tabla) y la vista dedicada "KPI HSQE".
 // El encabezado con el boton de impresion queda SIEMPRE visible; solo cambian sus textos.
+function renderAccionesPanel(){
+  let panel = document.getElementById('accionesPanel');
+  if(!panel){
+    panel = document.createElement('div');
+    panel.id = 'accionesPanel';
+    panel.style.marginBottom = '22px';
+    document.querySelector('.main').appendChild(panel);
+  }
+  const site = currentSiteFilter;
+  const filas = [];
+  DATA.records.forEach(r=>{
+    if(site !== 'ALL' && r.instalacion !== site) return;
+    const push = (a, tipoAcc) => {
+      if(!a || !(a.descripcion||'').trim()) return;
+      filas.push({ id:r.id, cod:codigoMostrado(r), tipoAcc, desc:a.descripcion, resp:a.responsable||'—', venc:a.vencimiento||'', estado:a.estado||'—' });
+    };
+    (r.acciones_correctivas||[]).forEach(a=>push(a,'Correctiva'));
+    (r.acciones_preventivas||[]).forEach(a=>push(a,'Preventiva'));
+  });
+  filas.sort((a,b)=>{
+    const ac = esCerrado(a.estado), bc = esCerrado(b.estado);
+    if(ac !== bc) return ac ? 1 : -1;
+    return (a.venc||'9999-99-99').localeCompare(b.venc||'9999-99-99');
+  });
+  const hoy = todayISO();
+  const dotColor = (e) => esCerrado(e) ? '#1E7A4A' : (normalizeEstado(e)==='En Proceso' ? '#B07D0A' : '#C0392B');
+  const rows = filas.map(f=>{
+    const vencida = !esCerrado(f.estado) && f.venc && f.venc < hoy;
+    return `<tr>
+      <td><span class="id-tag" style="cursor:pointer;" onclick="openRecordForm('${f.id}')" title="Abrir registro">${f.cod}</span></td>
+      <td>${f.tipoAcc}</td>
+      <td class="desc-cell" style="font-size:11.5px;">${(f.desc||'').slice(0,120)}${(f.desc||'').length>120?'…':''}</td>
+      <td>${f.resp}</td>
+      <td class="mono ${vencida?'overdue':''}" style="font-size:12px;white-space:nowrap;">${vencida?'⚠ ':''}${f.venc?fmtDate(f.venc):'—'}</td>
+      <td><div class="status-cell" style="white-space:nowrap;"><span class="status-dot" style="background:${dotColor(f.estado)}"></span>${f.estado}</div></td>
+    </tr>`;
+  }).join('');
+  panel.innerHTML = `
+    <div style="font-size:12px;color:var(--graphite);margin-bottom:10px;">${filas.length} acción(es) — solo consulta. Tocá el código para abrir el registro y tratarla.</div>
+    <div id="tableWrapAcciones"><table>
+      <thead><tr><th>Registro</th><th>Tipo</th><th>Descripción</th><th>Responsable</th><th>Vencimiento</th><th>Estado</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="6" style="text-align:center;color:var(--graphite-light);padding:20px;">Sin acciones cargadas.</td></tr>'}</tbody>
+    </table></div>`;
+}
+
 function setKpiViewMode(kpiMode){
+  const accMode = currentTypeFilter === 'ACCIONES';
+  const especial = kpiMode || accMode;
   const toggles = [
     document.getElementById('kpiRow'),
     document.querySelector('.chart-row'),
@@ -1384,9 +1436,11 @@ function setKpiViewMode(kpiMode){
     document.getElementById('tableWrap'),
     document.querySelector('.topbar button.btn'),
   ];
-  toggles.forEach(el=>{ if(el) el.style.display = kpiMode ? 'none' : ''; });
+  toggles.forEach(el=>{ if(el) el.style.display = especial ? 'none' : ''; });
   const sc = document.getElementById('scoreCardPanel');
   if(sc) sc.style.display = kpiMode ? 'block' : 'none';
+  const ap = document.getElementById('accionesPanel');
+  if(ap) ap.style.display = accMode ? 'block' : 'none';
 
   const label = document.getElementById('chartsSectionLabel');
   const header = label ? label.parentElement : null;
@@ -1414,9 +1468,14 @@ function renderAll(){
   if(navCat) navCat.style.display = puedeConfig ? '' : 'none';
 
   const kpiMode = currentTypeFilter === 'KPI';
+  const accMode = currentTypeFilter === 'ACCIONES';
   setKpiViewMode(kpiMode);
 
-  if(kpiMode){
+  if(accMode){
+    document.getElementById('viewTitle').textContent = 'Plan de acciones';
+    document.getElementById('viewMeta').textContent = 'Acciones correctivas y preventivas de todos los registros (solo consulta)';
+    renderAccionesPanel();
+  } else if(kpiMode){
     document.getElementById('viewTitle').textContent = 'KPI HSQE';
     document.getElementById('viewMeta').textContent = 'Indicadores OCIMF y No Conformidades en auditorias ISM/ISO';
     renderOcimfKpi();
