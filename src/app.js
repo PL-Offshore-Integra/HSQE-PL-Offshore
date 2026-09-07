@@ -130,11 +130,11 @@ const CLASIF_OCIMF = ['','LTI - Lesión con Tiempo Perdido','MTI - Lesión con T
 // Tipos que llevan Clasificación OCIMF/TMSA (solo Accidente e Incidente)
 const DEFAULT_LOGOS = {
   cleansea: "/cleansea.png",
-  ploffshore: "/ploffshore-azul.png", // versión azul — para fondos claros (sidebar blanco y PDF)
+  ploffshore: "/brand/PL_Offshore_Azul.png", // versión azul — para fondos claros (sidebar blanco y PDF)
 };
 // Versión BLANCA del logo, para fondos oscuros (barra lateral azul)
 const DEFAULT_LOGOS_WHITE = {
-  ploffshore: "/PL_Offshore_Blanco.png",
+  ploffshore: "/brand/PL_Offshore_Blanco.png",
 };
 function guessDefaultLogo(companyName){
   const n = (companyName||'').toLowerCase();
@@ -3453,7 +3453,7 @@ window.addEventListener('afterprint', ()=>{ document.getElementById('printReport
 /* ============ IMPRESIÓN DE REGISTRO INDIVIDUAL ============ */
 // Convierte el logo a base64 para incrustarlo dentro del .doc (autocontenido).
 // Los logos subidos por el usuario ya vienen como data URI; los logos por
-// defecto (/PL.png, /cleansea.png) se descargan y se convierten al vuelo.
+// defecto (/brand/PL_Offshore_Azul.png, /cleansea.png) se descargan y se convierten al vuelo.
 async function logoToDataURL(src){
   if(!src) return null;
   if(src.startsWith('data:')) return src;

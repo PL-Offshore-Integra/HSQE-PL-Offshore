@@ -37,7 +37,7 @@ function showLogin(message) {
       <div>
         <div class="login-left-divider"></div>
         <div class="login-left-company">
-          <img src="/PL.png" alt="PL Offshore" class="login-left-company-logo" />
+          <img src="/brand/PL_Offshore_Blanco.png" alt="PL Offshore" class="login-left-company-logo" />
           <div class="login-left-company-name">PL Offshore | HSQE</div>
         </div>
         <div class="login-left-line"></div>
