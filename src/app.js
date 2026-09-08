@@ -4243,8 +4243,15 @@ async function buildRecordPdf(id){
 // desde ahí el usuario imprime o guarda con los propios controles del visor.
 // La pestaña se abre ANTES de generar el PDF (todavía dentro del gesto de clic del usuario) y recién
 // después se navega al archivo — si se abriera con window.open() luego del await, el navegador la bloquea.
-// Se arma como File (no Blob a secas): así el nombre sugerido al guardar/descargar respeta
-// nombreArchivo en vez de un nombre genérico de blob.
+//
+// El visor nativo de PDF de Chrome arma el nombre sugerido al descargar a partir de la URL del blob
+// (un identificador al azar), no del nombre del archivo — por eso "guardar desde la previsualización"
+// traía un nombre raro en vez del código del registro. Para garantizarlo se envuelve el PDF en una
+// página HTML con un botón "Descargar" que usa <a download="..."> — ese atributo sí respeta el nombre
+// siempre, en todos los navegadores.
+function escapeHtml(s){
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
 async function previewRecordPDF(id){
   const win = window.open('', '_blank');
   if(win){
@@ -4260,11 +4267,29 @@ async function previewRecordPDF(id){
     return;
   }
   const { bytes, nombreArchivo, tieneAnexos } = built;
-  const file = new File([bytes], `${nombreArchivo}.pdf`, { type:'application/pdf' });
-  const url = URL.createObjectURL(file);
-  win.location.href = url;
+  const fileName = `${nombreArchivo}.pdf`;
+  const pdfBlob = new Blob([bytes], { type:'application/pdf' });
+  const pdfUrl = URL.createObjectURL(pdfBlob);
+  const wrapperHtml = `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(nombreArchivo)}</title>
+<style>
+  html,body{margin:0;height:100%;font-family:Arial,Helvetica,sans-serif;}
+  .bar{position:fixed;top:0;left:0;right:0;height:50px;background:#002247;display:flex;align-items:center;justify-content:space-between;padding:0 16px;z-index:10;box-sizing:border-box;}
+  .bar .nombre{color:#fff;font-size:12.5px;opacity:0.85;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-right:12px;}
+  .bar a{color:#fff;background:#0A3A66;border:1px solid rgba(255,255,255,0.25);padding:8px 16px;border-radius:4px;text-decoration:none;font-size:13px;font-weight:600;white-space:nowrap;}
+  .bar a:hover{background:#00152C;}
+  iframe{position:absolute;top:50px;left:0;right:0;bottom:0;width:100%;height:calc(100% - 50px);border:0;}
+</style>
+</head><body>
+  <div class="bar"><span class="nombre">${escapeHtml(fileName)}</span><a href="${pdfUrl}" download="${escapeHtml(fileName)}">⬇ Descargar PDF</a></div>
+  <iframe src="${pdfUrl}"></iframe>
+</body></html>`;
+  const wrapperUrl = URL.createObjectURL(new Blob([wrapperHtml], { type:'text/html' }));
+  win.location.href = wrapperUrl;
   showToast('Abriendo vista previa del PDF' + (tieneAnexos ? ' (con anexos)' : ''));
-  setTimeout(() => { try{ URL.revokeObjectURL(url); }catch(e){} }, 120000);
+  setTimeout(() => {
+    try{ URL.revokeObjectURL(pdfUrl); }catch(e){}
+    try{ URL.revokeObjectURL(wrapperUrl); }catch(e){}
+  }, 300000);
 }
 
 /* ============ INIT ============ */
