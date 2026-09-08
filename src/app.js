@@ -761,6 +761,14 @@ function applyTableFilters(list){
 
 /* ============ RENDER: KPI ============ */
 function renderKPIs(){
+  // Capacitación y Tareas ISO/ISM no muestran esta fila (Registros totales / Abiertas / Vencidas /
+  // Por vencer): no aporta información relevante en esas secciones.
+  const kpiRowEl = document.getElementById('kpiRow');
+  if(currentTypeFilter === 'CAP' || currentTypeFilter === 'TISO'){
+    if(kpiRowEl) kpiRowEl.style.display = 'none';
+    return;
+  }
+  if(kpiRowEl) kpiRowEl.style.display = '';
   const list = applyDateFilter(filteredRecords(false));
   const abiertas = list.filter(r=>!esCerrado(r.estado)).length;
   const vencidas = list.filter(isOverdue).length;
@@ -1603,6 +1611,13 @@ function setKpiViewMode(kpiMode){
   toggles.forEach(el=>{ if(el) el.style.display = especial ? 'none' : ''; });
   const sc = document.getElementById('scoreCardPanel');
   if(sc) sc.style.display = kpiMode ? 'block' : 'none';
+  // Los paneles KPI OCIMF y KPI Auditorías ISM/ISO son exclusivos de "KPI HSQE". Se ocultan acá
+  // de forma centralizada para que no queden pegados (visibles) al saltar directo desde KPI HSQE
+  // a Plan de acciones o Programados — antes solo se ocultaban al pasar por una sección normal.
+  const ocp = document.getElementById('ocimfKpiPanel');
+  if(ocp && !kpiMode) ocp.style.display = 'none';
+  const ancp = document.getElementById('auditNcKpiPanel');
+  if(ancp && !kpiMode) ancp.style.display = 'none';
   const ap = document.getElementById('accionesPanel');
   if(ap) ap.style.display = accMode ? 'block' : 'none';
   const iap = document.getElementById('programadosPanel');
