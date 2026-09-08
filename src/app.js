@@ -554,10 +554,10 @@ function isDueSoon(r){
   }
   return todasAcciones(r).some(a => a.estado !== 'Cerrado' && a.vencimiento && a.vencimiento >= hoy && a.vencimiento <= limiteISO);
 }
-// Programados (próxima repetición de una Tarea ISO/ISM o Auditoría) abiertos, vencidos o por vencer
-// (30 días) — alimenta el contador del ítem "Programados" del menú.
+// Programados (próxima repetición de una Tarea ISO/ISM o Auditoría) que siguen abiertos —
+// alimenta el contador del ítem "Programados" del menú (mismo total que ve el panel).
 function programadosAbiertos(){ return DATA.records.filter(r => r.tipo === 'PROG' && !esCerrado(r.estado)); }
-function countProgramadosAlerta(){ return programadosAbiertos().filter(r => isOverdue(r) || isDueSoon(r)).length; }
+function countProgramadosAlerta(){ return programadosAbiertos().length; }
 function todasAcciones(r){
   return [...(Array.isArray(r.acciones_correctivas)?r.acciones_correctivas:[]), ...(Array.isArray(r.acciones_preventivas)?r.acciones_preventivas:[])];
 }
@@ -1700,7 +1700,7 @@ function openRecordForm(id){
         <div class="section-title">Clasificación</div>
         <div class="field-row">
           <div class="field"><label>Tipo de evento</label>
-            <select id="f_tipo" ${tipo==='PROG'?'disabled':''}>${Object.keys(TYPES).filter(k=>(k!=='PROG' || tipo==='PROG') && (k!=='TISO' || usuarioActualPuedeVisar())).map(k=>`<option value="${k}" ${k===tipo?'selected':''}>${TYPES[k].label}</option>`).join('')}</select>
+            <select id="f_tipo">${Object.keys(TYPES).filter(k=>(k!=='PROG' || tipo==='PROG') && (k!=='TISO' || usuarioActualPuedeVisar())).map(k=>`<option value="${k}" ${k===tipo?'selected':''}>${TYPES[k].label}</option>`).join('')}</select>
           </div>
           <div class="field"><label>Cliente / Operación</label>
             <select id="f_cliente">${clienteOptionsHtml(r ? r.cliente_operacion : 'No Asignado a Cliente')}</select>
@@ -1792,7 +1792,7 @@ function openRecordForm(id){
           ${(() => {
             const origen = r ? DATA.records.find(x=>x.id===r.origen_registro_id) : null;
             const origenTxt = origen ? `${TYPES[origen.tipo] ? TYPES[origen.tipo].label : origen.tipo} ${codigoMostrado(origen)}` : (r ? (r.origen_registro_tipo||'—') : '—');
-            return `<div style="font-size:11px;color:var(--graphite-light);margin:-8px 0 10px;">Generado automáticamente desde <b>${origenTxt}</b> · Recurrencia: <b>${recurrenciaLabel(r?r.prog_recurrencia||'':'')}</b>. Al marcar este registro como "Cerrado" se genera automáticamente el siguiente Programado.</div>`;
+            return `<div style="font-size:11px;color:var(--graphite-light);margin:-8px 0 10px;">Generado automáticamente desde <b>${origenTxt}</b> · Recurrencia: <b>${recurrenciaLabel(r?r.prog_recurrencia||'':'')}</b>. Al marcar este registro como "Cerrado" se genera automáticamente el siguiente Programado.<br>¿Necesitás atenderlo con el formulario completo (por ej. cargar los hallazgos de la auditoría)? Cambiá "Tipo de evento" arriba por el tipo que corresponda y completalo — se va a guardar como un registro nuevo y este Programado va a quedar cerrado como historial.</div>`;
           })()}
           <div class="field"><label>Responsable</label>
             <select id="f_prog_responsable">${cargoOptionsHtml(r?r.responsable||'':'')}</select>
@@ -2865,40 +2865,56 @@ async function saveRecord(){
   }
 
   let estadoAnteriorProg = null;
+  let prevRecord = null;
   if(editingId){
-    const prev = DATA.records.find(x=>x.id===editingId);
-    if(prev){
-      estadoAnteriorProg = prev.estado;
-      if(prev.visado){
+    prevRecord = DATA.records.find(x=>x.id===editingId);
+    if(prevRecord){
+      estadoAnteriorProg = prevRecord.estado;
+      if(prevRecord.visado){
         // Se conserva el visado existente. Nota de auditoría: si el contenido cambió,
         // el visado sigue vigente; ver recomendación de invalidar visado tras edición.
-        rec.visado = prev.visado;
-        rec.visado_por = prev.visado_por;
-        rec.visado_cargo = prev.visado_cargo;
-        rec.visado_email = prev.visado_email;
-        rec.visado_fecha = prev.visado_fecha;
+        rec.visado = prevRecord.visado;
+        rec.visado_por = prevRecord.visado_por;
+        rec.visado_cargo = prevRecord.visado_cargo;
+        rec.visado_email = prevRecord.visado_email;
+        rec.visado_fecha = prevRecord.visado_fecha;
       }
       if(esProg){
         // Vínculo con el registro madre: no hay campo de formulario para esto, se conserva tal cual.
-        rec.origen_automatico = prev.origen_automatico || false;
-        rec.origen_registro_id = prev.origen_registro_id || '';
-        rec.origen_registro_tipo = prev.origen_registro_tipo || '';
-        rec.prog_recurrencia = prev.prog_recurrencia || '';
+        rec.origen_automatico = prevRecord.origen_automatico || false;
+        rec.origen_registro_id = prevRecord.origen_registro_id || '';
+        rec.origen_registro_tipo = prevRecord.origen_registro_tipo || '';
+        rec.prog_recurrencia = prevRecord.prog_recurrencia || '';
       }
     }
   }
 
-  if(editingId){
+  // Atender un Programado cambiándole la Clasificación: se guarda como un registro NUEVO
+  // (con numeración propia del tipo elegido, no el ID del Programado) y el Programado original
+  // queda cerrado como historial, vinculado al registro que generó. Si el registro nuevo tiene
+  // recurrencia, más abajo se genera su propio Programado — no un duplicado del que se cierra acá.
+  const promoviendoProgramado = !!(prevRecord && prevRecord.tipo === 'PROG' && tipoSel !== 'PROG');
+  const cambiados = [];
+  if(promoviendoProgramado){
+    rec.id = generateRecordId(tipoSel, fechaSel);
+    prevRecord.estado = 'Cerrado';
+    prevRecord.fecha_cierre = todayISO();
+    prevRecord.referencia_normativa = `Atendido — convertido en ${TYPES[tipoSel] ? TYPES[tipoSel].label : tipoSel} ${rec.id}`;
+    DATA.records.push(rec);
+    cambiados.push(prevRecord, rec);
+  } else if(editingId){
     const idx = DATA.records.findIndex(x=>x.id===editingId);
     DATA.records[idx] = rec;
+    cambiados.push(rec);
   } else {
     DATA.records.push(rec);
+    cambiados.push(rec);
   }
   const nuevasLA = manageLeccionesAprendidas(rec);
   const nuevosHall = manageHallazgosAuditoria(rec);
   const nuevosObs = manageObservacionesInspeccion(rec);
-  const progResult = manageProgramados(rec, estadoAnteriorProg);
-  const cambiados = [rec, ...progResult.upsert];
+  const progResult = manageProgramados(rec, promoviendoProgramado ? null : estadoAnteriorProg);
+  cambiados.push(...progResult.upsert);
   (rec.lecciones_aprendidas || []).forEach(item => {
     if(item.la_id){
       const la = DATA.records.find(x => x.id === item.la_id);
@@ -2924,7 +2940,10 @@ async function saveRecord(){
   closeModal();
   renderAll();
   const generadosTotal = nuevosHall + nuevosObs;
-  showToast(generadosTotal>0 ? `Guardado — se ${generadosTotal===1?'creó 1 hallazgo':'crearon '+generadosTotal+' hallazgos'} para seguimiento` : (nuevasLA>0 ? `Registro guardado — se ${nuevasLA===1?'generó 1 Lección Aprendida':'generaron '+nuevasLA+' Lecciones Aprendidas'} para seguimiento` : (progResult.nuevos>0 ? `Registro guardado — se generó 1 Programado para la próxima repetición` : (editingId? 'Registro actualizado' : 'Registro creado'))));
+  showToast(promoviendoProgramado ? `Programado atendido — se creó ${TYPES[tipoSel]?TYPES[tipoSel].label:tipoSel} ${rec.id}${progResult.nuevos>0?' y se generó el próximo Programado':''}`
+    : generadosTotal>0 ? `Guardado — se ${generadosTotal===1?'creó 1 hallazgo':'crearon '+generadosTotal+' hallazgos'} para seguimiento`
+    : (nuevasLA>0 ? `Registro guardado — se ${nuevasLA===1?'generó 1 Lección Aprendida':'generaron '+nuevasLA+' Lecciones Aprendidas'} para seguimiento`
+    : (progResult.nuevos>0 ? `Registro guardado — se generó 1 Programado para la próxima repetición` : (editingId? 'Registro actualizado' : 'Registro creado'))));
   if(sinMail.length){
     setTimeout(() => showToast('Ojo: sin correo cargado (no recibirán aviso): ' + sinMail.join(', ') + '. Cargalo en Gestionar catálogos → Cargos.'), 2600);
   }
