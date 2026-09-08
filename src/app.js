@@ -626,7 +626,9 @@ const NAV_ORDER_PROACTIVOS = ['AI','CI','SUG'];
 const NAV_GROUP_CAPACITACION = ['CAP'];
 const NAV_GROUP_AUDITORIAS = ['AUD','INSP'];
 const NAV_GROUP_TAREAS_ISO = ['TISO'];
-const NAV_ORDER_ALL_TYPES = [...NAV_GROUP_AUDITORIAS, ...NAV_GROUP_HALLAZGOS, ...NAV_GROUP_EVENTOS, ...NAV_ORDER_PROACTIVOS, ...NAV_GROUP_CAPACITACION, ...NAV_GROUP_TAREAS_ISO];
+// Tareas ISO/ISM queda fuera de "Registros por tipo" a propósito: es una sección aparte,
+// no se mezcla con el gráfico ni los totales de la vista general ("Todos los registros").
+const NAV_ORDER_ALL_TYPES = [...NAV_GROUP_AUDITORIAS, ...NAV_GROUP_HALLAZGOS, ...NAV_GROUP_EVENTOS, ...NAV_ORDER_PROACTIVOS, ...NAV_GROUP_CAPACITACION];
 // Color del punto/bullet en el menú (independiente del color del tipo en tablas/gráficos)
 const NAV_DOT_COLORS = {
   ALL:'#002247',
@@ -645,7 +647,8 @@ function renderTypeNav(){
   const group = arr => arr.filter(k=>TYPES[k]).map(k=>navItem(k, TYPES[k].label, navDotColor(k), count(k))).join('');
   const label = (t, mt) => `<div class="nav-label" style="margin-top:${mt||0}px;">${t}</div>`;
   let html = label('Categorías');
-  html += navItem('ALL', 'Todos los registros', navDotColor('ALL'), filtered.length);
+  // Tareas ISO/ISM no se mezcla en el total de "Todos los registros" (queda solo en su sección).
+  html += navItem('ALL', 'Todos los registros', navDotColor('ALL'), filtered.filter(r=>r.tipo!=='TISO').length);
   html += label('Auditorías / Inspecciones', 12) + group(NAV_GROUP_AUDITORIAS);
   html += label('Hallazgos', 12) + group(NAV_GROUP_HALLAZGOS);
   html += label('Reporte de Eventos', 12) + group(NAV_GROUP_EVENTOS);
@@ -660,7 +663,10 @@ function renderTypeNav(){
   html += `<div class="nav-item ${currentTypeFilter==='KPI'?'active':''}" onclick="setTypeFilter('KPI')">
     <span class="nav-dot" style="background:#2ECC71"></span>KPI HSQE
   </div>`;
-  const totalAcciones = DATA.records.reduce((n,r)=> n + (r.acciones_correctivas||[]).filter(a=>(a.descripcion||'').trim()).length + (r.acciones_preventivas||[]).filter(a=>(a.descripcion||'').trim()).length, 0);
+  // Cuenta solo acciones abiertas / en proceso (mismo criterio que el panel de Plan de acciones);
+  // antes contaba también las ya cerradas, inflando el número del menú.
+  const accionPendiente = a => (a.descripcion||'').trim() && !esCerrado(a.estado);
+  const totalAcciones = DATA.records.reduce((n,r)=> n + (r.acciones_correctivas||[]).filter(accionPendiente).length + (r.acciones_preventivas||[]).filter(accionPendiente).length, 0);
   html += `<div class="nav-item ${currentTypeFilter==='ACCIONES'?'active':''}" onclick="setTypeFilter('ACCIONES')">
     <span class="nav-dot" style="background:#5B6671"></span>Plan de acciones
     <span class="nav-count">${totalAcciones}</span>
@@ -704,7 +710,10 @@ function clearFilters(){
 function filteredRecords(bySiteOnly){
   let r = DATA.records.filter(x => currentSiteFilter==='ALL' || x.instalacion===currentSiteFilter);
   if(currentClienteFilter!=='ALL') r = r.filter(x => (x.cliente_operacion||'') === currentClienteFilter);
-  if(!bySiteOnly && currentTypeFilter!=='ALL') r = r.filter(x=>x.tipo===currentTypeFilter);
+  if(!bySiteOnly){
+    if(currentTypeFilter==='ALL') r = r.filter(x=>x.tipo!=='TISO'); // Tareas ISO/ISM solo se ve en su propia sección
+    else r = r.filter(x=>x.tipo===currentTypeFilter);
+  }
   return r;
 }
 // Filtro por rango de fechas (Desde/Hasta). Afecta KPIs, gráficos y tabla del panel.
@@ -1396,7 +1405,10 @@ function renderTable(){
       <td class="mono ${isOverdue(r)?'overdue':''}" style="font-size:12px;white-space:nowrap;">${isOverdue(r)?'⚠ ':''}${resumen.vencimiento?fmtDate(resumen.vencimiento):'—'}</td>` : ''}
       ${mostrarResponsable ? `<td>${resumen.responsable}</td>` : ''}
       <td style="text-align:center">${nAdj>0 ? '📎 '+nAdj : '—'}</td>
-      <td style="text-align:center;white-space:nowrap;"><button class="btn" style="padding:4px 8px;font-size:11px;" title="Imprimir PDF" onclick="event.stopPropagation();printRecordPDF('${r.id}')">🖨 PDF</button></td>
+      <td style="text-align:center;white-space:nowrap;">
+        <button class="btn secondary" style="padding:4px 8px;font-size:11px;" title="Previsualizar PDF" onclick="event.stopPropagation();previewRecordPDF('${r.id}')">👁 Ver</button>
+        <button class="btn" style="padding:4px 8px;font-size:11px;" title="Imprimir PDF" onclick="event.stopPropagation();printRecordPDF('${r.id}')">🖨 PDF</button>
+      </td>
     </tr>`;
   }).join('');
 
@@ -2093,6 +2105,7 @@ function openRecordForm(id){
         <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;">
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
             ${r && usuarioActualPuedeVisar() ? `<button class="btn danger" onclick="deleteRecord('${r.id}')">Eliminar</button>` : ''}
+            ${r? `<button class="btn secondary" onclick="previewRecordPDF('${r.id}')">👁 Previsualizar</button>` : ''}
             ${r? `<button class="btn" onclick="printRecordPDF('${r.id}')">🖨 Imprimir PDF</button>` : ''}
           </div>
           <div style="display:flex;gap:8px;">
@@ -3974,9 +3987,11 @@ function canvasRegionToPngBytes(srcCanvas, sy, sh){
 
 // Genera un PDF real (A4 vertical), incrusta las imágenes como páginas y FUSIONA
 // los PDF adjuntos (sus páginas se copian tal cual), y lo descarga.
-async function printRecordPDF(id){
+// Arma el PDF completo (cuerpo del reporte + anexos incrustados) y devuelve sus bytes.
+// Usado tanto por printRecordPDF (imprimir) como por previewRecordPDF (solo ver).
+async function buildRecordPdf(id){
   const doc = await composeRecordBody(id);
-  if(!doc) return;
+  if(!doc) return null;
   const { r, body } = doc;
   let holder = null;
   try{
@@ -4060,48 +4075,81 @@ async function printRecordPDF(id){
     outDoc.setTitle(nombreArchivo);      // el navegador lo usa como nombre por defecto al guardar
     outDoc.setSubject('Reporte HSQE - Integra');
 
-    // 5) Vista previa de impresión (no descarga directa)
     const outBytes = await outDoc.save();
-    const blob = new Blob([outBytes], { type:'application/pdf' });
-    const url = URL.createObjectURL(blob);
-
-    const prev = document.getElementById('pdfPreviewFrame');
-    if(prev){ try{ URL.revokeObjectURL(prev.src); }catch(e){} prev.remove(); }
-    const iframe = document.createElement('iframe');
-    iframe.id = 'pdfPreviewFrame';
-    iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
-    iframe.src = url;
-    document.body.appendChild(iframe);
-    // El navegador usa el título de la página como nombre por defecto al "Guardar como PDF".
-    // Lo cambiamos temporalmente al nombre del reporte y lo restauramos al cerrar el diálogo.
-    const prevTitle = document.title;
-    const restoreTitle = () => { document.title = prevTitle; };
-    iframe.onload = () => {
-      setTimeout(() => {
-        try{
-          document.title = nombreArchivo;
-          window.addEventListener('afterprint', restoreTitle, { once:true });
-          try{ iframe.contentWindow.addEventListener('afterprint', restoreTitle, { once:true }); }catch(e){}
-          iframe.contentWindow.focus();
-          iframe.contentWindow.print();   // abre el diálogo/vista previa de impresión
-          setTimeout(restoreTitle, 60000); // respaldo por si afterprint no se dispara
-        }catch(e){
-          restoreTitle();
-          window.open(url, '_blank');      // si el navegador no lo permite, abre el PDF en otra pestaña
-        }
-      }, 300);
-    };
-    setTimeout(() => { try{ URL.revokeObjectURL(url); }catch(e){} }, 120000);
-    showToast('Abriendo vista previa de impresión' + (adj.length ? ' (con anexos)' : ''));
+    return { r, bytes: outBytes, nombreArchivo, tieneAnexos: adj.length > 0 };
   }catch(e){
     console.error('Error generando PDF:', e);
     showToast('Error al generar el PDF: ' + ((e && e.message) || e));
     if(holder) holder.remove();
+    return null;
   }
 }
 
+// Imprimir: abre el diálogo de impresión del navegador (que ya muestra su propia vista previa).
+async function printRecordPDF(id){
+  const built = await buildRecordPdf(id);
+  if(!built) return;
+  const { bytes, nombreArchivo, tieneAnexos } = built;
+  const blob = new Blob([bytes], { type:'application/pdf' });
+  const url = URL.createObjectURL(blob);
+
+  const prev = document.getElementById('pdfPreviewFrame');
+  if(prev){ try{ URL.revokeObjectURL(prev.src); }catch(e){} prev.remove(); }
+  const iframe = document.createElement('iframe');
+  iframe.id = 'pdfPreviewFrame';
+  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
+  iframe.src = url;
+  document.body.appendChild(iframe);
+  // El navegador usa el título de la página como nombre por defecto al "Guardar como PDF".
+  // Lo cambiamos temporalmente al nombre del reporte y lo restauramos al cerrar el diálogo.
+  const prevTitle = document.title;
+  const restoreTitle = () => { document.title = prevTitle; };
+  iframe.onload = () => {
+    setTimeout(() => {
+      try{
+        document.title = nombreArchivo;
+        window.addEventListener('afterprint', restoreTitle, { once:true });
+        try{ iframe.contentWindow.addEventListener('afterprint', restoreTitle, { once:true }); }catch(e){}
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();   // abre el diálogo/vista previa de impresión
+        setTimeout(restoreTitle, 60000); // respaldo por si afterprint no se dispara
+      }catch(e){
+        restoreTitle();
+        window.open(url, '_blank');      // si el navegador no lo permite, abre el PDF en otra pestaña
+      }
+    }, 300);
+  };
+  setTimeout(() => { try{ URL.revokeObjectURL(url); }catch(e){} }, 120000);
+  showToast('Abriendo vista previa de impresión' + (tieneAnexos ? ' (con anexos)' : ''));
+}
+
+// Previsualizar: abre el PDF en una pestaña nueva con el visor nativo del navegador (sin ir directo a imprimir).
+// La pestaña se abre ANTES de generar el PDF (todavía dentro del gesto de clic del usuario) y recién
+// después se navega al archivo — si se abriera con window.open() luego del await, el navegador la bloquea.
+async function previewRecordPDF(id){
+  const win = window.open('', '_blank');
+  if(win){
+    win.document.write('<title>Generando PDF…</title><body style="font-family:Arial,sans-serif;color:#5B6671;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;">Generando la vista previa del PDF…</body>');
+  }
+  const built = await buildRecordPdf(id);
+  if(!built){
+    if(win) win.close();
+    return;
+  }
+  if(!win){
+    showToast('El navegador bloqueó la ventana de vista previa. Habilitá los pop-ups para este sitio e intentá de nuevo.');
+    return;
+  }
+  const { bytes, tieneAnexos } = built;
+  const blob = new Blob([bytes], { type:'application/pdf' });
+  const url = URL.createObjectURL(blob);
+  win.location.href = url;
+  showToast('Abriendo vista previa del PDF' + (tieneAnexos ? ' (con anexos)' : ''));
+  setTimeout(() => { try{ URL.revokeObjectURL(url); }catch(e){} }, 120000);
+}
+
 /* ============ INIT ============ */
-Object.assign(window, { addAccion, addAttachmentFile, addAttachmentManual, addCatalogItem, addDotacionMes, addInvestigador, addLeccion, addCapParticipante, addHallazgo, addObservacion, addVessel, addVisador, clearFilters, closeModal, deleteRecord, exportData, printRecordPDF, openAttachment, openCatalogManager, openRecordForm, openVisadoresManager, printChartsReport, printCompanyReport, removeAccion, removeAttachment, removeCatalogItem, removeDotacionMes, removeInvestigador, removeLeccion, removeCapParticipante, removeHallazgo, removeObservacion, removeVessel, removeVisador, renderAll, renderTopbar, topbarSearch, renderAuditNcKpi, renderOcimfKpi, renderScoreCard, setScoreCardYear, setScoreCardTarget, renderTable, saveRecord, setCompanyLogo, updateSitioTipo, setSiteFilter, setClienteFilter, setTypeFilter, toggleCategoriaOtro, toggleTipificacionCausaOtro, toggleVisado, updateAccionField, updateInvestigadorField, updateCapParticipanteField, updateHallazgoField, updateObservacionField, updateVesselOptions, updateCargoField, addCargo, removeCargo, validateEstadoCierre, refreshData, logoutHsqe });
+Object.assign(window, { addAccion, addAttachmentFile, addAttachmentManual, addCatalogItem, addDotacionMes, addInvestigador, addLeccion, addCapParticipante, addHallazgo, addObservacion, addVessel, addVisador, clearFilters, closeModal, deleteRecord, exportData, printRecordPDF, openAttachment, openCatalogManager, openRecordForm, openVisadoresManager, printChartsReport, printCompanyReport, removeAccion, removeAttachment, removeCatalogItem, removeDotacionMes, removeInvestigador, removeLeccion, removeCapParticipante, removeHallazgo, removeObservacion, removeVessel, removeVisador, renderAll, renderTopbar, topbarSearch, renderAuditNcKpi, renderOcimfKpi, renderScoreCard, setScoreCardYear, setScoreCardTarget, renderTable, saveRecord, setCompanyLogo, updateSitioTipo, setSiteFilter, setClienteFilter, setTypeFilter, toggleCategoriaOtro, toggleTipificacionCausaOtro, toggleVisado, updateAccionField, updateInvestigadorField, updateCapParticipanteField, updateHallazgoField, updateObservacionField, updateVesselOptions, updateCargoField, addCargo, removeCargo, validateEstadoCierre, refreshData, logoutHsqe, previewRecordPDF });
 
 async function logoutHsqe(){
   await supabase.auth.signOut();
