@@ -20,6 +20,7 @@ const TYPES = {
   AUD: {label:'Auditoría',           color:'#3E6B8C'},
   INSP:{label:'Inspección',          color:'#2F8F83'},
   TISO:{label:'Tareas ISO/ISM',      color:'#146C5E'},
+  PROG:{label:'Programado',          color:'#4A5FBF'},
 };
 // Frase para personalizar etiquetas por tipo: "Fecha del incidente", "Título de la sugerencia de mejora", etc.
 const TIPO_DESCRIPTOR = {
@@ -37,6 +38,7 @@ const TIPO_DESCRIPTOR = {
   AUD: 'de la auditoría',
   INSP: 'de la inspección',
   TISO: 'de la tarea ISO/ISM',
+  PROG: 'de la tarea programada',
 };
 function tipoDescriptor(tipo){ return TIPO_DESCRIPTOR[tipo] || 'del evento'; }
 
@@ -49,6 +51,7 @@ const EN = {
   'Sugerencia de Mejora':'Improvement Suggestion',
   'Capacitación':'Training',
   'Tareas ISO/ISM':'ISO/ISM Tasks','Recurrencia':'Recurrence','Título de la tarea':'Task title',
+  'Programado':'Scheduled','Registro madre':'Source record',
   'Auditoría':'Audit','Datos de la auditoría':'Audit data','Tipo de auditoría':'Audit type',
   'Auditor':'Auditor','Hallazgos':'Findings','Tipo':'Type','Fecha de la auditoría':'Audit date',
   'Interna / Externa':'Internal / External','Norma / Tipo':'Standard / Type','Responsable':'Responsible','Estado':'Status',
@@ -166,7 +169,7 @@ let CLASIF_ORIGEN = ['','ISO','ISM','PNA','Inspección HSQE','Cliente','No Aplic
 // Oportunidad de Mejora y Lección Aprendida no llevan causa raíz/acción correctiva; llevan datos de comunicación
 // Solo Lección Aprendida no lleva causa raíz/acción correctiva; lleva datos de comunicación.
 // Oportunidad de Mejora se trata igual que Observación / No Conformidad (con causa raíz y acción correctiva).
-const TIPOS_SIN_CAUSA_ACCION = ['LA','SUG','CAP','AUD','INSP','TISO'];
+const TIPOS_SIN_CAUSA_ACCION = ['LA','SUG','CAP','AUD','INSP','TISO','PROG'];
 const MEDIOS_COMUNICACION = ['','Reunión de Seguridad','Correo Electrónico','Cartelera / Boletín HSQE','Charla de Seguridad (Toolbox Talk)','Sistema de Gestión (SGS)','Otro'];
 
 // Tipos que llevan campo "Lecciones Aprendidas" como parte del registro (Accidente / Incidente / Cuasi Accidente)
@@ -288,23 +291,12 @@ function computeVencimientoRecurrente(fechaISO, recurrencia){
   if(!fechaISO || !RECURRENCIA_MESES[recurrencia]) return '';
   return addMeses(fechaISO, RECURRENCIA_MESES[recurrencia]);
 }
-// Recurrencia efectiva de un registro, sea Tarea ISO/ISM o Auditoría.
+// Recurrencia configurada en el registro "madre" (Tarea ISO/ISM o Auditoría) — define si y cada
+// cuánto se genera un registro "Programado" (ver manageProgramados).
 function recurrenciaDeRegistro(r){
   if(r.tipo==='TISO') return r.tiso_recurrencia||'';
   if(r.tipo==='AUD') return r.aud_recurrencia||'';
   return '';
-}
-// Estado de una alerta según la fecha del PRÓXIMO vencimiento únicamente — a diferencia de
-// isOverdue/isDueSoon, NO se apaga si el registro actual está "Cerrado": cerrar esta instancia
-// no cancela la próxima repetición. Devuelve null si no aplica (sin recurrencia o sin fecha).
-function estadoRecurrencia(r){
-  const rec = recurrenciaDeRegistro(r);
-  if(!rec || !r.fecha_vencimiento) return null;
-  const hoy = todayISO();
-  if(r.fecha_vencimiento < hoy) return 'vencida';
-  const limite = new Date(); limite.setDate(limite.getDate()+30);
-  if(r.fecha_vencimiento <= limite.toISOString().slice(0,10)) return 'por_vencer';
-  return 'en_plazo';
 }
 
 
@@ -562,11 +554,10 @@ function isDueSoon(r){
   }
   return todasAcciones(r).some(a => a.estado !== 'Cerrado' && a.vencimiento && a.vencimiento >= hoy && a.vencimiento <= limiteISO);
 }
-// Tareas ISO/ISM con recurrencia vencida o por vencer (30 días) — alimenta el contador de "Alertas".
-function tisoAlertRecords(){
-  return DATA.records.filter(r => (r.tipo === 'TISO' || r.tipo === 'AUD') && ['vencida','por_vencer'].includes(estadoRecurrencia(r)));
-}
-function countTisoAlertas(){ return tisoAlertRecords().length; }
+// Programados (próxima repetición de una Tarea ISO/ISM o Auditoría) abiertos, vencidos o por vencer
+// (30 días) — alimenta el contador del ítem "Programados" del menú.
+function programadosAbiertos(){ return DATA.records.filter(r => r.tipo === 'PROG' && !esCerrado(r.estado)); }
+function countProgramadosAlerta(){ return programadosAbiertos().filter(r => isOverdue(r) || isDueSoon(r)).length; }
 function todasAcciones(r){
   return [...(Array.isArray(r.acciones_correctivas)?r.acciones_correctivas:[]), ...(Array.isArray(r.acciones_preventivas)?r.acciones_preventivas:[])];
 }
@@ -665,18 +656,18 @@ function renderTypeNav(){
   const label = (t, mt) => `<div class="nav-label" style="margin-top:${mt||0}px;">${t}</div>`;
   let html = label('Categorías');
   // Tareas ISO/ISM no se mezcla en el total de "Todos los registros" (queda solo en su sección).
-  html += navItem('ALL', 'Todos los registros', navDotColor('ALL'), filtered.filter(r=>r.tipo!=='TISO').length);
+  html += navItem('ALL', 'Todos los registros', navDotColor('ALL'), filtered.filter(r=>r.tipo!=='TISO' && r.tipo!=='PROG').length);
   html += label('Auditorías / Inspecciones', 12) + group(NAV_GROUP_AUDITORIAS);
   html += label('Hallazgos', 12) + group(NAV_GROUP_HALLAZGOS);
   html += label('Reporte de Eventos', 12) + group(NAV_GROUP_EVENTOS);
   html += label('Reportes Proactivos', 12) + group(NAV_ORDER_PROACTIVOS);
   html += label('Capacitación', 12) + group(NAV_GROUP_CAPACITACION);
-  // Tareas ISO/ISM y su panel de Alertas son de uso exclusivo del Responsable HSQE/DPA (visador).
+  // Tareas ISO/ISM y su panel de Programados son de uso exclusivo del Responsable HSQE/DPA (visador).
   if(usuarioActualPuedeVisar()){
     html += label('Tareas ISO/ISM', 12) + group(NAV_GROUP_TAREAS_ISO);
-    html += `<div class="nav-item ${currentTypeFilter==='TISO_ALERTAS'?'active':''}" onclick="setTypeFilter('TISO_ALERTAS')">
-      <span class="nav-dot" style="background:${STATUS['Abierto']}"></span>Alertas
-      <span class="nav-count">${countTisoAlertas()}</span>
+    html += `<div class="nav-item ${currentTypeFilter==='PROGRAMADOS'?'active':''}" onclick="setTypeFilter('PROGRAMADOS')">
+      <span class="nav-dot" style="background:${STATUS['Abierto']}"></span>Programados
+      <span class="nav-count">${countProgramadosAlerta()}</span>
     </div>`;
   }
   html += label('Objetivos', 12);
@@ -731,7 +722,7 @@ function filteredRecords(bySiteOnly){
   let r = DATA.records.filter(x => currentSiteFilter==='ALL' || x.instalacion===currentSiteFilter);
   if(currentClienteFilter!=='ALL') r = r.filter(x => (x.cliente_operacion||'') === currentClienteFilter);
   if(!bySiteOnly){
-    if(currentTypeFilter==='ALL') r = r.filter(x=>x.tipo!=='TISO'); // Tareas ISO/ISM solo se ve en su propia sección
+    if(currentTypeFilter==='ALL') r = r.filter(x=>x.tipo!=='TISO' && x.tipo!=='PROG'); // Tareas ISO/ISM y Programados solo se ven en su propia sección
     else r = r.filter(x=>x.tipo===currentTypeFilter);
   }
   return r;
@@ -1426,8 +1417,7 @@ function renderTable(){
       ${mostrarResponsable ? `<td>${resumen.responsable}</td>` : ''}
       <td style="text-align:center">${nAdj>0 ? '📎 '+nAdj : '—'}</td>
       <td style="text-align:center;white-space:nowrap;">
-        <button class="btn secondary" style="padding:4px 8px;font-size:11px;" title="Previsualizar PDF" onclick="event.stopPropagation();previewRecordPDF('${r.id}')">👁 Ver</button>
-        <button class="btn" style="padding:4px 8px;font-size:11px;" title="Imprimir PDF" onclick="event.stopPropagation();printRecordPDF('${r.id}')">🖨 PDF</button>
+        <button class="btn secondary" style="padding:4px 8px;font-size:11px;" title="Previsualizar / Imprimir PDF" onclick="event.stopPropagation();previewRecordPDF('${r.id}')">👁 Ver</button>
       </td>
     </tr>`;
   }).join('');
@@ -1549,62 +1539,60 @@ function renderAccionesPanel(){
   }
 }
 
-// Panel de Alertas: agrupa Tareas ISO/ISM y Auditorías recurrentes, vencidas / por vencer.
-// El estado que se muestra depende SOLO de la fecha del próximo vencimiento (estadoRecurrencia),
-// no de si el registro actual está "Cerrado" — cerrar esta instancia no cancela la próxima repetición.
-function renderIsoAlertasPanel(){
-  let panel = document.getElementById('isoAlertasPanel');
+// Panel de Programados: lista los registros "Programado" abiertos (la próxima repetición
+// pendiente de cada Tarea ISO/ISM o Auditoría con recurrencia). Al cerrar un Programado se genera
+// automáticamente el siguiente (ver manageProgramados) — por eso acá solo importan los abiertos.
+function renderProgramadosPanel(){
+  let panel = document.getElementById('programadosPanel');
   if(!panel){
     panel = document.createElement('div');
-    panel.id = 'isoAlertasPanel';
+    panel.id = 'programadosPanel';
     panel.style.marginBottom = '22px';
     document.querySelector('.main').appendChild(panel);
   }
   const site = currentSiteFilter;
-  // Todas las Tareas ISO/ISM (aunque no repitan) + solo las Auditorías que sí tienen recurrencia definida.
-  let list = DATA.records.filter(r => (r.tipo === 'TISO' || (r.tipo === 'AUD' && r.aud_recurrencia)) && (site==='ALL' || r.instalacion===site));
+  let list = DATA.records.filter(r => r.tipo === 'PROG' && !esCerrado(r.estado) && (site==='ALL' || r.instalacion===site));
   list.sort((a,b) => (a.fecha_vencimiento||'9999-99-99').localeCompare(b.fecha_vencimiento||'9999-99-99'));
-  let vencidas=0, porVencer=0;
+  let vencidos=0, porVencer=0;
   list.forEach(r=>{
-    const e = estadoRecurrencia(r);
-    if(e==='vencida') vencidas++;
-    else if(e==='por_vencer') porVencer++;
+    if(isOverdue(r)) vencidos++;
+    else if(isDueSoon(r)) porVencer++;
   });
-  const ESTADO_TXT = { vencida:'Vencida', por_vencer:'Por vencer', en_plazo:'En plazo' };
-  const ESTADO_COLOR = { vencida:'#C0392B', por_vencer:'#B07D0A', en_plazo:'#1E7A4A' };
   const rows = list.map(r=>{
-    const e = estadoRecurrencia(r); // null | 'vencida' | 'por_vencer' | 'en_plazo'
-    const estadoTxt = e ? ESTADO_TXT[e] : '—';
-    const estadoColor = e ? ESTADO_COLOR[e] : '#8B96A1';
-    return `<tr style="cursor:pointer;" onclick="openRecordForm('${r.id}')" title="Abrir registro para editar">
+    const vencido = isOverdue(r);
+    const porVenc = isDueSoon(r);
+    const estadoTxt = vencido ? 'Vencido' : (porVenc ? 'Por vencer' : 'En plazo');
+    const estadoColor = vencido ? '#C0392B' : (porVenc ? '#B07D0A' : '#1E7A4A');
+    const origen = DATA.records.find(x=>x.id===r.origen_registro_id);
+    const origenTxt = origen ? `${TYPES[origen.tipo] ? TYPES[origen.tipo].label : origen.tipo} ${codigoMostrado(origen)}` : (r.origen_registro_tipo||'—');
+    return `<tr style="cursor:pointer;" onclick="openRecordForm('${r.id}')" title="Abrir registro para atenderlo">
       <td><span class="id-tag">${codigoMostrado(r)}</span></td>
-      <td><span class="type-tag" style="background:${TYPES[r.tipo].color}20;color:${TYPES[r.tipo].color}">${TYPES[r.tipo].label}</span></td>
       <td class="desc-cell" style="font-size:11.5px;">${r.titulo||'—'}</td>
+      <td style="font-size:11px;color:var(--graphite-light);">${origenTxt}</td>
       <td>${r.instalacion||'—'}</td>
-      <td class="mono" style="font-size:12px;white-space:nowrap;">${fmtDate(r.fecha)}</td>
-      <td>${recurrenciaLabel(recurrenciaDeRegistro(r))}</td>
+      <td>${recurrenciaLabel(r.prog_recurrencia)}</td>
       <td>${r.responsable||'—'}</td>
-      <td class="mono ${e==='vencida'?'overdue':''}" style="font-size:12px;white-space:nowrap;">${e==='vencida'?'⚠ ':''}${r.fecha_vencimiento?fmtDate(r.fecha_vencimiento):'—'}</td>
+      <td class="mono ${vencido?'overdue':''}" style="font-size:12px;white-space:nowrap;">${vencido?'⚠ ':''}${r.fecha_vencimiento?fmtDate(r.fecha_vencimiento):'—'}</td>
       <td><div class="status-cell" style="white-space:nowrap;"><span class="status-dot" style="background:${estadoColor}"></span>${estadoTxt}</div></td>
     </tr>`;
   }).join('');
   panel.innerHTML = `
     <div class="kpi-row" style="margin-bottom:18px;">
-      <div class="kpi-card alert"><div class="val">${vencidas}</div><div class="lbl">Vencidas</div></div>
+      <div class="kpi-card alert"><div class="val">${vencidos}</div><div class="lbl">Vencidos</div></div>
       <div class="kpi-card"><div class="val">${porVencer}</div><div class="lbl">Por vencer (30 días)</div></div>
-      <div class="kpi-card"><div class="val">${list.length}</div><div class="lbl">Registros cargados</div></div>
+      <div class="kpi-card"><div class="val">${list.length}</div><div class="lbl">Programados pendientes</div></div>
     </div>
-    <div style="font-size:12px;color:var(--graphite);margin-bottom:10px;">Se listan las Tareas ISO/ISM y las Auditorías con recurrencia (Anual / Cada 6 meses / Cada 2 años y medio). El estado refleja la fecha del próximo vencimiento, independientemente de si el registro actual está cerrado. Tocá una fila para abrir el registro.</div>
-    <div id="tableWrapIsoAlertas"><table>
-      <thead><tr><th>ID</th><th>Tipo</th><th>Título</th><th>Sitio</th><th>Última fecha</th><th>Recurrencia</th><th>Responsable</th><th>Próximo vencimiento</th><th>Estado</th></tr></thead>
-      <tbody>${rows || '<tr><td colspan="9" style="text-align:center;color:var(--graphite-light);padding:20px;">No hay registros recurrentes cargados.</td></tr>'}</tbody>
+    <div style="font-size:12px;color:var(--graphite);margin-bottom:10px;">Cada fila es la próxima repetición pendiente de una Tarea ISO/ISM o Auditoría. Abrila para atenderla; al marcarla "Cerrado" se genera automáticamente el siguiente Programado y esta desaparece de esta lista.</div>
+    <div id="tableWrapProgramados"><table>
+      <thead><tr><th>ID</th><th>Título</th><th>Registro madre</th><th>Sitio</th><th>Recurrencia</th><th>Responsable</th><th>Vencimiento</th><th>Estado</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="8" style="text-align:center;color:var(--graphite-light);padding:20px;">No hay Programados pendientes.</td></tr>'}</tbody>
     </table></div>`;
 }
 
 function setKpiViewMode(kpiMode){
   const accMode = currentTypeFilter === 'ACCIONES';
-  const isoAlertMode = currentTypeFilter === 'TISO_ALERTAS';
-  const especial = kpiMode || accMode || isoAlertMode;
+  const progMode = currentTypeFilter === 'PROGRAMADOS';
+  const especial = kpiMode || accMode || progMode;
   const toggles = [
     document.getElementById('kpiRow'),
     document.querySelector('.chart-row'),
@@ -1617,8 +1605,8 @@ function setKpiViewMode(kpiMode){
   if(sc) sc.style.display = kpiMode ? 'block' : 'none';
   const ap = document.getElementById('accionesPanel');
   if(ap) ap.style.display = accMode ? 'block' : 'none';
-  const iap = document.getElementById('isoAlertasPanel');
-  if(iap) iap.style.display = isoAlertMode ? 'block' : 'none';
+  const iap = document.getElementById('programadosPanel');
+  if(iap) iap.style.display = progMode ? 'block' : 'none';
 
   const label = document.getElementById('chartsSectionLabel');
   const header = label ? label.parentElement : null;
@@ -1629,9 +1617,9 @@ function setKpiViewMode(kpiMode){
   } else if(accMode){
     if(label) label.textContent = 'Plan de acciones';
     if(printBtn) printBtn.textContent = '\uD83D\uDDA8 Imprimir plan de acciones (PDF)';
-  } else if(isoAlertMode){
-    if(label) label.textContent = 'Alertas';
-    if(printBtn) printBtn.textContent = '\uD83D\uDDA8 Imprimir alertas (PDF)';
+  } else if(progMode){
+    if(label) label.textContent = 'Programados';
+    if(printBtn) printBtn.textContent = '\uD83D\uDDA8 Imprimir programados (PDF)';
   } else if(printBtn){
     printBtn.textContent = '\uD83D\uDDA8 Imprimir graficos (PDF)';
   }
@@ -1653,17 +1641,17 @@ function renderAll(){
 
   const kpiMode = currentTypeFilter === 'KPI';
   const accMode = currentTypeFilter === 'ACCIONES';
-  const isoAlertMode = currentTypeFilter === 'TISO_ALERTAS';
+  const progMode = currentTypeFilter === 'PROGRAMADOS';
   setKpiViewMode(kpiMode);
 
   if(accMode){
     document.getElementById('viewTitle').textContent = 'Plan de acciones';
     document.getElementById('viewMeta').textContent = 'Acciones correctivas y preventivas de todos los registros (solo consulta)';
     renderAccionesPanel();
-  } else if(isoAlertMode){
-    document.getElementById('viewTitle').textContent = 'Alertas';
-    document.getElementById('viewMeta').textContent = 'Tareas ISO/ISM y Auditorías recurrentes, vencidas o por vencer (30 días)';
-    renderIsoAlertasPanel();
+  } else if(progMode){
+    document.getElementById('viewTitle').textContent = 'Programados';
+    document.getElementById('viewMeta').textContent = 'Próxima repetición pendiente de cada Tarea ISO/ISM o Auditoría recurrente';
+    renderProgramadosPanel();
   } else if(kpiMode){
     document.getElementById('viewTitle').textContent = 'KPI HSQE';
     document.getElementById('viewMeta').textContent = 'Indicadores OCIMF y No Conformidades en auditorias ISM/ISO';
@@ -1712,7 +1700,7 @@ function openRecordForm(id){
         <div class="section-title">Clasificación</div>
         <div class="field-row">
           <div class="field"><label>Tipo de evento</label>
-            <select id="f_tipo">${Object.keys(TYPES).filter(k=>k!=='TISO' || usuarioActualPuedeVisar()).map(k=>`<option value="${k}" ${k===tipo?'selected':''}>${TYPES[k].label}</option>`).join('')}</select>
+            <select id="f_tipo" ${tipo==='PROG'?'disabled':''}>${Object.keys(TYPES).filter(k=>(k!=='PROG' || tipo==='PROG') && (k!=='TISO' || usuarioActualPuedeVisar())).map(k=>`<option value="${k}" ${k===tipo?'selected':''}>${TYPES[k].label}</option>`).join('')}</select>
           </div>
           <div class="field"><label>Cliente / Operación</label>
             <select id="f_cliente">${clienteOptionsHtml(r ? r.cliente_operacion : 'No Asignado a Cliente')}</select>
@@ -1798,6 +1786,16 @@ function openRecordForm(id){
             <div class="field"><label>Responsable</label>
               <select id="f_tiso_responsable">${cargoOptionsHtml(r?r.responsable||'':'')}</select>
             </div>
+          </div>
+        </div>
+        <div id="block_prog">
+          ${(() => {
+            const origen = r ? DATA.records.find(x=>x.id===r.origen_registro_id) : null;
+            const origenTxt = origen ? `${TYPES[origen.tipo] ? TYPES[origen.tipo].label : origen.tipo} ${codigoMostrado(origen)}` : (r ? (r.origen_registro_tipo||'—') : '—');
+            return `<div style="font-size:11px;color:var(--graphite-light);margin:-8px 0 10px;">Generado automáticamente desde <b>${origenTxt}</b> · Recurrencia: <b>${recurrenciaLabel(r?r.prog_recurrencia||'':'')}</b>. Al marcar este registro como "Cerrado" se genera automáticamente el siguiente Programado.</div>`;
+          })()}
+          <div class="field"><label>Responsable</label>
+            <select id="f_prog_responsable">${cargoOptionsHtml(r?r.responsable||'':'')}</select>
           </div>
         </div>
         <div class="field" id="block_area"><label>Área / Departamento</label>
@@ -2057,9 +2055,9 @@ function openRecordForm(id){
             <input type="text" id="f_aud_auditor" value="${r?(r.aud_auditor||'').replace(/"/g,'&quot;'):''}" placeholder="Nombre del auditor">
           </div>
           <div class="field"><label>¿Se repite?</label>
-            <select id="f_aud_recurrencia" onchange="updateAudVencimientoSugerido()">${recurrenciaOptionsHtml(r?r.aud_recurrencia||'':'')}</select>
+            <select id="f_aud_recurrencia">${recurrenciaOptionsHtml(r?r.aud_recurrencia||'':'')}</select>
           </div>
-          <div style="font-size:11px;color:var(--graphite-light);margin:-6px 0 10px;">Si se repite, se sugiere la fecha de la próxima auditoría en "Fecha de vencimiento" (sección Gestión, más abajo) — la podés ajustar antes de guardar.</div>
+          <div style="font-size:11px;color:var(--graphite-light);margin:-6px 0 10px;">Si se repite, la próxima auditoría se va a ver en "Programados" — no en este registro.</div>
           <div class="section-title with-btn" style="margin-top:8px;">
             <span style="font-size:12.5px;">Hallazgos</span>
             <button type="button" class="btn secondary" style="padding:5px 10px;" onclick="addHallazgo()">+ Agregar hallazgo</button>
@@ -2134,8 +2132,7 @@ function openRecordForm(id){
         <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;">
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
             ${r && usuarioActualPuedeVisar() ? `<button class="btn danger" onclick="deleteRecord('${r.id}')">Eliminar</button>` : ''}
-            ${r? `<button class="btn secondary" onclick="previewRecordPDF('${r.id}')">👁 Previsualizar</button>` : ''}
-            ${r? `<button class="btn" onclick="printRecordPDF('${r.id}')">🖨 Imprimir PDF</button>` : ''}
+            ${r? `<button class="btn secondary" onclick="previewRecordPDF('${r.id}')">👁 Previsualizar / Imprimir PDF</button>` : ''}
           </div>
           <div style="display:flex;gap:8px;">
             <button class="btn secondary" onclick="closeModal()">Cancelar</button>
@@ -2487,21 +2484,21 @@ function toggleConditionalFields(){
   const esAud = (tipo === 'AUD');
   const esInsp = (tipo === 'INSP');
   const esTiso = (tipo === 'TISO');
+  const esProg = (tipo === 'PROG');
   if(esCap) setLbl('label_titulo', 'Tema de la capacitación');
   document.getElementById('block_titulo_libre').style.display = esTiso ? 'none' : 'block';
   document.getElementById('block_tiso').style.display = esTiso ? 'block' : 'none';
-  document.getElementById('block_area').style.display = (esAud || esInsp || esTiso) ? 'none' : 'block';
+  document.getElementById('block_prog').style.display = esProg ? 'block' : 'none';
+  document.getElementById('block_area').style.display = (esAud || esInsp || esTiso || esProg) ? 'none' : 'block';
   document.getElementById('block_causa_accion').style.display = TIPOS_SIN_CAUSA_ACCION.includes(tipo) ? 'none' : 'block';
-  document.getElementById('block_responsable_simple').style.display = (TIPOS_SIN_CAUSA_ACCION.includes(tipo) && !esSug && !esCap && !esAud && !esInsp && !esTiso) ? 'grid' : 'none';
-  document.getElementById('block_comunicacion').style.display = (TIPOS_SIN_CAUSA_ACCION.includes(tipo) && !esSug && !esCap && !esAud && !esInsp && !esTiso) ? 'block' : 'none';
+  document.getElementById('block_responsable_simple').style.display = (TIPOS_SIN_CAUSA_ACCION.includes(tipo) && !esSug && !esCap && !esAud && !esInsp && !esTiso && !esProg) ? 'grid' : 'none';
+  document.getElementById('block_comunicacion').style.display = (TIPOS_SIN_CAUSA_ACCION.includes(tipo) && !esSug && !esCap && !esAud && !esInsp && !esTiso && !esProg) ? 'block' : 'none';
   document.getElementById('block_sug_seguimiento').style.display = esSug ? 'block' : 'none';
   document.getElementById('block_cap').style.display = esCap ? 'block' : 'none';
   document.getElementById('block_aud').style.display = esAud ? 'block' : 'none';
   document.getElementById('block_insp').style.display = esInsp ? 'block' : 'none';
   document.getElementById('block_venc_aud').style.display = (esAud || esInsp) ? 'block' : 'none';
-  if(esAud) setLbl('label_venc_aud', 'Fecha de vencimiento / próxima auditoría');
-  else if(esInsp) setLbl('label_venc_aud', 'Fecha de vencimiento');
-  document.getElementById('block_reportado').style.display = (esCap || esAud || esInsp || esTiso) ? 'none' : 'block';
+  document.getElementById('block_reportado').style.display = (esCap || esAud || esInsp || esTiso || esProg) ? 'none' : 'block';
   document.getElementById('block_gestion').style.display = (esSug || esCap) ? 'none' : 'block';
   document.getElementById('block_cuasi').style.display = (tipo === 'CUA') ? 'block' : 'none';
   document.getElementById('block_categoria_aici').style.display = (tipo === 'INC') ? 'block' : 'none';
@@ -2552,16 +2549,6 @@ function toggleLesionBlock(){
   const naturaleza = document.getElementById('f_naturaleza_cuasi') ? document.getElementById('f_naturaleza_cuasi').value : '';
   const mostrar = (tipo === 'ACC') || (tipo === 'CUA' && (naturaleza === 'Personal' || naturaleza === 'Ambas'));
   document.getElementById('block_lesion').style.display = mostrar ? 'block' : 'none';
-}
-// Al elegir una recurrencia para la Auditoría, sugiere la fecha de la próxima auditoría
-// en "Fecha de vencimiento" (el usuario puede ajustarla antes de guardar).
-function updateAudVencimientoSugerido(){
-  const rec = getIfVal('f_aud_recurrencia');
-  if(!rec) return; // "No se repite": no tocar el campo manual
-  const fecha = getIfVal('f_fecha');
-  const nueva = computeVencimientoRecurrente(fecha, rec);
-  const vencEl = document.getElementById('f_venc_aud');
-  if(nueva && vencEl) vencEl.value = nueva;
 }
 function getIfVal(id){ const el = document.getElementById(id); return el ? el.value : ''; }
 function humanFileSize(bytes){
@@ -2733,6 +2720,7 @@ async function saveRecord(){
   const esAud = (tipoSel === 'AUD');
   const esInsp = (tipoSel === 'INSP');
   const esTiso = (tipoSel === 'TISO');
+  const esProg = (tipoSel === 'PROG');
   const estadoSel = esCap ? 'Cerrado' : (esSug ? getIf('f_sug_estado') : get('f_estado'));
   const esInc = (tipoSel === 'INC');
 
@@ -2860,8 +2848,8 @@ async function saveRecord(){
     comunicar_a: getIf('f_comunicar_a'),
     medio_comunicacion: getIf('f_medio_comunicacion'),
     plazo_comunicacion: getIf('f_plazo_comunicacion'),
-    responsable: esSug ? getIf('f_sug_resp') : (esTiso ? getIf('f_tiso_responsable') : (tipoSinAcciones ? get('f_responsable') : '')),
-    fecha_vencimiento: esSug ? getIf('f_sug_plazo_seg') : ((esAud || esInsp) ? getIf('f_venc_aud') : (esTiso ? computeVencimientoRecurrente(fechaSel, getIf('f_tiso_recurrencia')) : (tipoSinAcciones ? get('f_vencimiento') : ''))),
+    responsable: esSug ? getIf('f_sug_resp') : ((esTiso || esProg) ? getIf(esTiso ? 'f_tiso_responsable' : 'f_prog_responsable') : (tipoSinAcciones ? get('f_responsable') : '')),
+    fecha_vencimiento: esSug ? getIf('f_sug_plazo_seg') : ((esAud || esInsp) ? getIf('f_venc_aud') : (esProg ? fechaSel : (tipoSinAcciones ? get('f_vencimiento') : ''))),
     aud_recurrencia: esAud ? getIf('f_aud_recurrencia') : '',
     fecha_cierre: esSug ? getIf('f_sug_cierre') : get('f_cierre'),
     referencia_normativa: get('f_referencia'),
@@ -2870,22 +2858,33 @@ async function saveRecord(){
     sug_observacion: esSug ? getIf('f_sug_observacion') : '',
     adjuntos: JSON.parse(JSON.stringify(modalAttachments)),
   };
-  const requiereDescripcion = !esCap && !esAud && !esInsp && !esTiso; // estos tipos no tienen campo descripción propio
+  const requiereDescripcion = !esCap && !esAud && !esInsp && !esTiso && !esProg; // estos tipos no tienen campo descripción propio
   if(!rec.fecha || !rec.titulo || (requiereDescripcion && !rec.descripcion)){
     showToast(esInc ? 'Completá al menos fecha, título y la pregunta 1 (Describa qué pasó)' : (requiereDescripcion ? 'Completá al menos fecha, título y descripción' : 'Completá al menos fecha y título'));
     return;
   }
 
+  let estadoAnteriorProg = null;
   if(editingId){
     const prev = DATA.records.find(x=>x.id===editingId);
-    if(prev && prev.visado){
-      // Se conserva el visado existente. Nota de auditoría: si el contenido cambió,
-      // el visado sigue vigente; ver recomendación de invalidar visado tras edición.
-      rec.visado = prev.visado;
-      rec.visado_por = prev.visado_por;
-      rec.visado_cargo = prev.visado_cargo;
-      rec.visado_email = prev.visado_email;
-      rec.visado_fecha = prev.visado_fecha;
+    if(prev){
+      estadoAnteriorProg = prev.estado;
+      if(prev.visado){
+        // Se conserva el visado existente. Nota de auditoría: si el contenido cambió,
+        // el visado sigue vigente; ver recomendación de invalidar visado tras edición.
+        rec.visado = prev.visado;
+        rec.visado_por = prev.visado_por;
+        rec.visado_cargo = prev.visado_cargo;
+        rec.visado_email = prev.visado_email;
+        rec.visado_fecha = prev.visado_fecha;
+      }
+      if(esProg){
+        // Vínculo con el registro madre: no hay campo de formulario para esto, se conserva tal cual.
+        rec.origen_automatico = prev.origen_automatico || false;
+        rec.origen_registro_id = prev.origen_registro_id || '';
+        rec.origen_registro_tipo = prev.origen_registro_tipo || '';
+        rec.prog_recurrencia = prev.prog_recurrencia || '';
+      }
     }
   }
 
@@ -2898,7 +2897,8 @@ async function saveRecord(){
   const nuevasLA = manageLeccionesAprendidas(rec);
   const nuevosHall = manageHallazgosAuditoria(rec);
   const nuevosObs = manageObservacionesInspeccion(rec);
-  const cambiados = [rec];
+  const progResult = manageProgramados(rec, estadoAnteriorProg);
+  const cambiados = [rec, ...progResult.upsert];
   (rec.lecciones_aprendidas || []).forEach(item => {
     if(item.la_id){
       const la = DATA.records.find(x => x.id === item.la_id);
@@ -2918,12 +2918,13 @@ async function saveRecord(){
     }
   });
   const resultados = await Promise.all(cambiados.map(r => upsertRegistro(r)));
+  if(progResult.deleteIds.length) await Promise.all(progResult.deleteIds.map(id => deleteRegistroRow(id)));
   await saveCatalogos(); // personas nuevas registradas
   if(resultados.some(ok => !ok)){ return; } // error ya notificado; el modal queda abierto
   closeModal();
   renderAll();
   const generadosTotal = nuevosHall + nuevosObs;
-  showToast(generadosTotal>0 ? `Guardado — se ${generadosTotal===1?'creó 1 hallazgo':'crearon '+generadosTotal+' hallazgos'} para seguimiento` : (nuevasLA>0 ? `Registro guardado — se ${nuevasLA===1?'generó 1 Lección Aprendida':'generaron '+nuevasLA+' Lecciones Aprendidas'} para seguimiento` : (editingId? 'Registro actualizado' : 'Registro creado')));
+  showToast(generadosTotal>0 ? `Guardado — se ${generadosTotal===1?'creó 1 hallazgo':'crearon '+generadosTotal+' hallazgos'} para seguimiento` : (nuevasLA>0 ? `Registro guardado — se ${nuevasLA===1?'generó 1 Lección Aprendida':'generaron '+nuevasLA+' Lecciones Aprendidas'} para seguimiento` : (progResult.nuevos>0 ? `Registro guardado — se generó 1 Programado para la próxima repetición` : (editingId? 'Registro actualizado' : 'Registro creado'))));
   if(sinMail.length){
     setTimeout(() => showToast('Ojo: sin correo cargado (no recibirán aviso): ' + sinMail.join(', ') + '. Cargalo en Gestionar catálogos → Cargos.'), 2600);
   }
@@ -3018,6 +3019,79 @@ function manageHallazgosAuditoria(rec){
   return nuevos;
 }
 
+// Genera y mantiene los registros "Programado" (la próxima repetición de una Tarea ISO/ISM o
+// Auditoría con recurrencia). Reglas:
+//  - Al guardar una madre (TISO/AUD) con recurrencia y sin un Programado abierto vinculado, crea uno.
+//  - Si ya tiene uno abierto, sincroniza título/sitio/responsable (no toca la fecha ya programada).
+//  - Si la recurrencia se saca ("No se repite"), cancela (elimina) el Programado abierto pendiente.
+//  - Al cerrar un Programado (transición de estado a "Cerrado"), genera el siguiente, con vencimiento
+//    = vencimiento actual + recurrencia (no desde hoy, para no correr el calendario).
+// Devuelve { upsert:[...registros a guardar en Supabase...], deleteIds:[...], nuevos } para que
+// saveRecord sincronice y avise al usuario.
+function manageProgramados(rec, estadoAnterior){
+  const upsert = [];
+  const deleteIds = [];
+  let nuevos = 0;
+
+  const crearProgramado = (origen, vencimiento) => {
+    if(!vencimiento) return null;
+    const madreId = origen.tipo === 'PROG' ? origen.origen_registro_id : origen.id;
+    const madreTipo = origen.tipo === 'PROG' ? origen.origen_registro_tipo : origen.tipo;
+    const recurrencia = origen.tipo === 'PROG' ? origen.prog_recurrencia : recurrenciaDeRegistro(origen);
+    const prog = {
+      id: generateRecordId('PROG', vencimiento),
+      tipo: 'PROG',
+      empresa_id: origen.empresa_id,
+      cliente_operacion: origen.cliente_operacion,
+      instalacion: origen.instalacion,
+      fecha: vencimiento,
+      area: '',
+      titulo: origen.titulo,
+      descripcion: '',
+      responsable: origen.responsable || '',
+      estado: 'Abierto',
+      fecha_vencimiento: vencimiento,
+      fecha_cierre: '',
+      referencia_normativa: `Generado automáticamente desde ${madreTipo} ${madreId}`,
+      acciones_correctivas: [], acciones_preventivas: [],
+      adjuntos: [], lecciones_aprendidas: [],
+      origen_automatico: true,
+      origen_registro_id: madreId,
+      origen_registro_tipo: madreTipo,
+      prog_recurrencia: recurrencia,
+    };
+    DATA.records.push(prog);
+    upsert.push(prog);
+    nuevos++;
+    return prog;
+  };
+
+  if(rec.tipo === 'TISO' || rec.tipo === 'AUD'){
+    const recurrencia = recurrenciaDeRegistro(rec);
+    const existente = DATA.records.find(x => x.tipo==='PROG' && x.origen_registro_id===rec.id && x.origen_registro_tipo===rec.tipo && !esCerrado(x.estado));
+    if(!recurrencia){
+      if(existente){ deleteIds.push(existente.id); DATA.records = DATA.records.filter(x=>x.id!==existente.id); }
+      return { upsert, deleteIds, nuevos };
+    }
+    if(existente){
+      existente.titulo = rec.titulo;
+      existente.instalacion = rec.instalacion;
+      existente.cliente_operacion = rec.cliente_operacion;
+      existente.responsable = rec.responsable || existente.responsable;
+      existente.prog_recurrencia = recurrencia;
+      upsert.push(existente);
+    } else {
+      crearProgramado(rec, computeVencimientoRecurrente(rec.fecha, recurrencia));
+    }
+  }
+
+  if(rec.tipo === 'PROG' && estadoAnterior !== 'Cerrado' && esCerrado(rec.estado) && rec.prog_recurrencia){
+    crearProgramado(rec, computeVencimientoRecurrente(rec.fecha_vencimiento, rec.prog_recurrencia));
+  }
+
+  return { upsert, deleteIds, nuevos };
+}
+
 function manageLeccionesAprendidas(rec){
   if(!TIPOS_CON_LECCIONES.includes(rec.tipo) || !Array.isArray(rec.lecciones_aprendidas)) return 0;
   let nuevas = 0;
@@ -3067,7 +3141,10 @@ async function deleteRecord(id){
   if(!confirm('¿Eliminar este registro? Esta acción no se puede deshacer.')) return;
   const ok = await deleteRegistroRow(id);
   if(!ok) return;
-  DATA.records = DATA.records.filter(r=>r.id!==id);
+  // Si era una Tarea ISO/ISM o Auditoría madre, se cancela también su Programado pendiente (si lo tenía).
+  const progHuerfano = DATA.records.find(x => x.tipo==='PROG' && x.origen_registro_id===id && !esCerrado(x.estado));
+  if(progHuerfano) await deleteRegistroRow(progHuerfano.id);
+  DATA.records = DATA.records.filter(r=>r.id!==id && (!progHuerfano || r.id!==progHuerfano.id));
   closeModal();
   renderAll();
   showToast('Registro eliminado');
@@ -3447,25 +3524,24 @@ async function printChartsReport(){
     return;
   }
 
-  if(currentTypeFilter === 'TISO_ALERTAS'){
+  if(currentTypeFilter === 'PROGRAMADOS'){
     const site = currentSiteFilter;
-    const list = DATA.records.filter(r => (r.tipo === 'TISO' || (r.tipo === 'AUD' && r.aud_recurrencia)) && (site==='ALL' || r.instalacion===site));
+    const list = DATA.records.filter(r => r.tipo === 'PROG' && !esCerrado(r.estado) && (site==='ALL' || r.instalacion===site));
     list.sort((a,b) => (a.fecha_vencimiento||'9999-99-99').localeCompare(b.fecha_vencimiento||'9999-99-99'));
-    const ESTADO_TXT = { vencida:'Vencida', por_vencer:'Por vencer', en_plazo:'En plazo' };
     const th = (t) => `<th style="border:1px solid #DBE0E6;padding:5px 7px;background:#F2F5F8;text-align:left;">${t}</th>`;
     const filasHtml = list.map(r=>{
-      const e = estadoRecurrencia(r);
-      const vencida = e === 'vencida';
-      const estadoTxt = e ? ESTADO_TXT[e] : '—';
+      const vencido = isOverdue(r);
+      const estadoTxt = vencido ? 'Vencido' : (isDueSoon(r) ? 'Por vencer' : 'En plazo');
+      const origen = DATA.records.find(x=>x.id===r.origen_registro_id);
+      const origenTxt = origen ? `${TYPES[origen.tipo] ? TYPES[origen.tipo].label : origen.tipo} ${codigoMostrado(origen)}` : (r.origen_registro_tipo||'—');
       return `<tr>
         <td style="border:1px solid #DBE0E6;padding:5px 7px;font-family:'IBM Plex Mono',monospace;font-size:8.5pt;">${codigoMostrado(r)}</td>
-        <td style="border:1px solid #DBE0E6;padding:5px 7px;">${TYPES[r.tipo].label}</td>
         <td style="border:1px solid #DBE0E6;padding:5px 7px;">${r.titulo||'—'}</td>
+        <td style="border:1px solid #DBE0E6;padding:5px 7px;">${origenTxt}</td>
         <td style="border:1px solid #DBE0E6;padding:5px 7px;">${r.instalacion||'—'}</td>
-        <td style="border:1px solid #DBE0E6;padding:5px 7px;white-space:nowrap;">${fmtDate(r.fecha)}</td>
-        <td style="border:1px solid #DBE0E6;padding:5px 7px;">${recurrenciaLabel(recurrenciaDeRegistro(r))}</td>
+        <td style="border:1px solid #DBE0E6;padding:5px 7px;">${recurrenciaLabel(r.prog_recurrencia)}</td>
         <td style="border:1px solid #DBE0E6;padding:5px 7px;">${r.responsable||'—'}</td>
-        <td style="border:1px solid #DBE0E6;padding:5px 7px;white-space:nowrap;color:${vencida?'#C0392B':'#333'};">${vencida?'⚠ ':''}${r.fecha_vencimiento?fmtDate(r.fecha_vencimiento):'—'}</td>
+        <td style="border:1px solid #DBE0E6;padding:5px 7px;white-space:nowrap;color:${vencido?'#C0392B':'#333'};">${vencido?'⚠ ':''}${r.fecha_vencimiento?fmtDate(r.fecha_vencimiento):'—'}</td>
         <td style="border:1px solid #DBE0E6;padding:5px 7px;">${estadoTxt}</td>
       </tr>`;
     }).join('');
@@ -3473,15 +3549,15 @@ async function printChartsReport(){
       <table style="width:100%;border-collapse:collapse;margin-bottom:14px;">
         <tr>
           <td style="width:70%;vertical-align:middle;border-bottom:3px solid #002247;padding-bottom:8px;">
-            <div class="pr-title">INTEGRA · MÓDULO HSQE — ALERTAS</div>
-            <div class="pr-sub">${co?co.name:''}${currentSiteFilter!=='ALL' ? ' — '+currentSiteFilter : ''} · ${list.length} registro(s) · Generado el ${fechaHora}</div>
+            <div class="pr-title">INTEGRA · MÓDULO HSQE — PROGRAMADOS</div>
+            <div class="pr-sub">${co?co.name:''}${currentSiteFilter!=='ALL' ? ' — '+currentSiteFilter : ''} · ${list.length} pendiente(s) · Generado el ${fechaHora}</div>
           </td>
           <td style="width:30%;text-align:right;">${logo?`<img src="${logo}" style="max-height:60px;max-width:160px;">`:''}</td>
         </tr>
       </table>
       <table style="width:100%;border-collapse:collapse;font-size:9pt;">
-        <tr>${th('ID')}${th('Tipo')}${th('Título')}${th('Sitio')}${th('Última fecha')}${th('Recurrencia')}${th('Responsable')}${th('Próximo vencimiento')}${th('Estado')}</tr>
-        ${filasHtml || '<tr><td colspan="9" style="border:1px solid #DBE0E6;padding:12px;text-align:center;color:#8B96A1;">Sin registros recurrentes cargados.</td></tr>'}
+        <tr>${th('ID')}${th('Título')}${th('Registro madre')}${th('Sitio')}${th('Recurrencia')}${th('Responsable')}${th('Vencimiento')}${th('Estado')}</tr>
+        ${filasHtml || '<tr><td colspan="8" style="border:1px solid #DBE0E6;padding:12px;text-align:center;color:#8B96A1;">Sin Programados pendientes.</td></tr>'}
       </table>
     </div>`;
     const imgs = Array.from(container.querySelectorAll('img'));
@@ -3781,6 +3857,7 @@ async function composeRecordBody(id){
     metaCells.push({l:'Fecha de vencimiento', v:(resumenMeta.vencimiento?fmtDate(resumenMeta.vencimiento):'—')+(isOverdue(r)?' ⚠ VENCIDA':'')});
     metaCells.push({l:'Fecha de cierre', v:fmtDate(r.fecha_cierre)});
     if(r.tipo==='TISO') metaCells.push({l:'Recurrencia', v:recurrenciaLabel(r.tiso_recurrencia)});
+    if(r.tipo==='PROG') metaCells.push({l:'Recurrencia', v:recurrenciaLabel(r.prog_recurrencia)});
     if(r.tipo!=='SUG') metaCells.push({l:'Referencia normativa', v:r.referencia_normativa||'—'});
   }
   let metaTableHtml = '<table style="width:100%;border-collapse:collapse;margin-bottom:14px;">';
@@ -4034,9 +4111,9 @@ function canvasRegionToPngBytes(srcCanvas, sy, sh){
 }
 
 // Genera un PDF real (A4 vertical), incrusta las imágenes como páginas y FUSIONA
-// los PDF adjuntos (sus páginas se copian tal cual), y lo descarga.
-// Arma el PDF completo (cuerpo del reporte + anexos incrustados) y devuelve sus bytes.
-// Usado tanto por printRecordPDF (imprimir) como por previewRecordPDF (solo ver).
+// los PDF adjuntos (sus páginas se copian tal cual). Arma el PDF completo y devuelve sus bytes;
+// usado por previewRecordPDF para mostrarlo en una pestaña nueva (desde ahí se imprime o se guarda,
+// con el propio visor de PDF del navegador).
 async function buildRecordPdf(id){
   const doc = await composeRecordBody(id);
   if(!doc) return null;
@@ -4133,47 +4210,12 @@ async function buildRecordPdf(id){
   }
 }
 
-// Imprimir: abre el diálogo de impresión del navegador (que ya muestra su propia vista previa).
-async function printRecordPDF(id){
-  const built = await buildRecordPdf(id);
-  if(!built) return;
-  const { bytes, nombreArchivo, tieneAnexos } = built;
-  const blob = new Blob([bytes], { type:'application/pdf' });
-  const url = URL.createObjectURL(blob);
-
-  const prev = document.getElementById('pdfPreviewFrame');
-  if(prev){ try{ URL.revokeObjectURL(prev.src); }catch(e){} prev.remove(); }
-  const iframe = document.createElement('iframe');
-  iframe.id = 'pdfPreviewFrame';
-  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
-  iframe.src = url;
-  document.body.appendChild(iframe);
-  // El navegador usa el título de la página como nombre por defecto al "Guardar como PDF".
-  // Lo cambiamos temporalmente al nombre del reporte y lo restauramos al cerrar el diálogo.
-  const prevTitle = document.title;
-  const restoreTitle = () => { document.title = prevTitle; };
-  iframe.onload = () => {
-    setTimeout(() => {
-      try{
-        document.title = nombreArchivo;
-        window.addEventListener('afterprint', restoreTitle, { once:true });
-        try{ iframe.contentWindow.addEventListener('afterprint', restoreTitle, { once:true }); }catch(e){}
-        iframe.contentWindow.focus();
-        iframe.contentWindow.print();   // abre el diálogo/vista previa de impresión
-        setTimeout(restoreTitle, 60000); // respaldo por si afterprint no se dispara
-      }catch(e){
-        restoreTitle();
-        window.open(url, '_blank');      // si el navegador no lo permite, abre el PDF en otra pestaña
-      }
-    }, 300);
-  };
-  setTimeout(() => { try{ URL.revokeObjectURL(url); }catch(e){} }, 120000);
-  showToast('Abriendo vista previa de impresión' + (tieneAnexos ? ' (con anexos)' : ''));
-}
-
-// Previsualizar: abre el PDF en una pestaña nueva con el visor nativo del navegador (sin ir directo a imprimir).
+// Previsualizar / Imprimir: abre el PDF en una pestaña nueva con el visor nativo del navegador —
+// desde ahí el usuario imprime o guarda con los propios controles del visor.
 // La pestaña se abre ANTES de generar el PDF (todavía dentro del gesto de clic del usuario) y recién
 // después se navega al archivo — si se abriera con window.open() luego del await, el navegador la bloquea.
+// Se arma como File (no Blob a secas): así el nombre sugerido al guardar/descargar respeta
+// nombreArchivo en vez de un nombre genérico de blob.
 async function previewRecordPDF(id){
   const win = window.open('', '_blank');
   if(win){
@@ -4188,16 +4230,16 @@ async function previewRecordPDF(id){
     showToast('El navegador bloqueó la ventana de vista previa. Habilitá los pop-ups para este sitio e intentá de nuevo.');
     return;
   }
-  const { bytes, tieneAnexos } = built;
-  const blob = new Blob([bytes], { type:'application/pdf' });
-  const url = URL.createObjectURL(blob);
+  const { bytes, nombreArchivo, tieneAnexos } = built;
+  const file = new File([bytes], `${nombreArchivo}.pdf`, { type:'application/pdf' });
+  const url = URL.createObjectURL(file);
   win.location.href = url;
   showToast('Abriendo vista previa del PDF' + (tieneAnexos ? ' (con anexos)' : ''));
   setTimeout(() => { try{ URL.revokeObjectURL(url); }catch(e){} }, 120000);
 }
 
 /* ============ INIT ============ */
-Object.assign(window, { addAccion, addAttachmentFile, addAttachmentManual, addCatalogItem, addDotacionMes, addInvestigador, addLeccion, addCapParticipante, addHallazgo, addObservacion, addVessel, addVisador, clearFilters, closeModal, deleteRecord, exportData, printRecordPDF, openAttachment, openCatalogManager, openRecordForm, openVisadoresManager, printChartsReport, printCompanyReport, removeAccion, removeAttachment, removeCatalogItem, removeDotacionMes, removeInvestigador, removeLeccion, removeCapParticipante, removeHallazgo, removeObservacion, removeVessel, removeVisador, renderAll, renderTopbar, topbarSearch, renderAuditNcKpi, renderOcimfKpi, renderScoreCard, setScoreCardYear, setScoreCardTarget, renderTable, saveRecord, setCompanyLogo, updateSitioTipo, setSiteFilter, setClienteFilter, setTypeFilter, toggleCategoriaOtro, toggleTipificacionCausaOtro, toggleVisado, updateAccionField, updateInvestigadorField, updateCapParticipanteField, updateHallazgoField, updateObservacionField, updateVesselOptions, updateCargoField, addCargo, removeCargo, validateEstadoCierre, refreshData, logoutHsqe, previewRecordPDF, updateAudVencimientoSugerido });
+Object.assign(window, { addAccion, addAttachmentFile, addAttachmentManual, addCatalogItem, addDotacionMes, addInvestigador, addLeccion, addCapParticipante, addHallazgo, addObservacion, addVessel, addVisador, clearFilters, closeModal, deleteRecord, exportData, openAttachment, openCatalogManager, openRecordForm, openVisadoresManager, printChartsReport, printCompanyReport, removeAccion, removeAttachment, removeCatalogItem, removeDotacionMes, removeInvestigador, removeLeccion, removeCapParticipante, removeHallazgo, removeObservacion, removeVessel, removeVisador, renderAll, renderTopbar, topbarSearch, renderAuditNcKpi, renderOcimfKpi, renderScoreCard, setScoreCardYear, setScoreCardTarget, renderTable, saveRecord, setCompanyLogo, updateSitioTipo, setSiteFilter, setClienteFilter, setTypeFilter, toggleCategoriaOtro, toggleTipificacionCausaOtro, toggleVisado, updateAccionField, updateInvestigadorField, updateCapParticipanteField, updateHallazgoField, updateObservacionField, updateVesselOptions, updateCargoField, addCargo, removeCargo, validateEstadoCierre, refreshData, logoutHsqe, previewRecordPDF });
 
 async function logoutHsqe(){
   await supabase.auth.signOut();
