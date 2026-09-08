@@ -2112,9 +2112,6 @@ function openRecordForm(id){
             <select id="f_estado" onchange="validateEstadoCierre(this)">${Object.keys(STATUS).map(s=>`<option ${r&&r.estado===s?'selected':''}>${s}</option>`).join('')}</select>
           </div>
         </div>
-        <div class="field" id="block_venc_aud" style="display:none;"><label id="label_venc_aud">Fecha de vencimiento</label>
-          <input type="date" id="f_venc_aud" value="${r?r.fecha_vencimiento||'':''}">
-        </div>
         <div class="field"><label>Fecha de cierre (si corresponde)</label>
           <input type="date" id="f_cierre" value="${r?r.fecha_cierre||'':''}">
         </div>
@@ -2512,7 +2509,6 @@ function toggleConditionalFields(){
   document.getElementById('block_cap').style.display = esCap ? 'block' : 'none';
   document.getElementById('block_aud').style.display = esAud ? 'block' : 'none';
   document.getElementById('block_insp').style.display = esInsp ? 'block' : 'none';
-  document.getElementById('block_venc_aud').style.display = (esAud || esInsp) ? 'block' : 'none';
   document.getElementById('block_reportado').style.display = (esCap || esAud || esInsp || esTiso || esProg) ? 'none' : 'block';
   document.getElementById('block_gestion').style.display = (esSug || esCap) ? 'none' : 'block';
   document.getElementById('block_cuasi').style.display = (tipo === 'CUA') ? 'block' : 'none';
@@ -2864,7 +2860,7 @@ async function saveRecord(){
     medio_comunicacion: getIf('f_medio_comunicacion'),
     plazo_comunicacion: getIf('f_plazo_comunicacion'),
     responsable: esSug ? getIf('f_sug_resp') : ((esTiso || esProg) ? getIf(esTiso ? 'f_tiso_responsable' : 'f_prog_responsable') : (tipoSinAcciones ? get('f_responsable') : '')),
-    fecha_vencimiento: esSug ? getIf('f_sug_plazo_seg') : ((esAud || esInsp) ? getIf('f_venc_aud') : (esProg ? fechaSel : (tipoSinAcciones ? get('f_vencimiento') : ''))),
+    fecha_vencimiento: esSug ? getIf('f_sug_plazo_seg') : ((esAud || esInsp) ? '' : (esProg ? fechaSel : (tipoSinAcciones ? get('f_vencimiento') : ''))),
     aud_recurrencia: esAud ? getIf('f_aud_recurrencia') : '',
     fecha_cierre: esSug ? getIf('f_sug_cierre') : get('f_cierre'),
     referencia_normativa: get('f_referencia'),
@@ -3872,7 +3868,6 @@ async function composeRecordBody(id){
     metaCells.push({l:'Norma / Tipo', v:r.aud_norma||'—'});
     metaCells.push({l:'Auditor', v:r.aud_auditor||'—'});
     metaCells.push({l:'Recurrencia', v:recurrenciaLabel(r.aud_recurrencia)});
-    metaCells.push({l:'Próxima auditoría', v:r.fecha_vencimiento?fmtDate(r.fecha_vencimiento):'—'});
     metaCells.push({l:'Estado actual', v:r.estado||'—'});
   } else if(r.tipo==='INSP'){
     metaCells.push({l:'Interna / Externa', v:r.insp_alcance||'—'});
