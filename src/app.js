@@ -270,24 +270,41 @@ function tareasIsoOptionsHtml(selected){
   if(sel && !list.includes(sel)) list.push(sel);
   return list.map(c=>`<option value="${(c||'').replace(/"/g,'&quot;')}" ${sel===c?'selected':''}>${c||'— Seleccionar —'}</option>`).join('');
 }
-// Recurrencia de las Tareas ISO/ISM: define cada cuánto se espera repetir la tarea.
-const TISO_RECURRENCIAS = { '':'No se repite', anual:'Anual', semestral:'Cada 6 meses' };
-function recurrenciaLabel(v){ return TISO_RECURRENCIAS[v||''] || TISO_RECURRENCIAS['']; }
-function tisoRecurrenciaOptionsHtml(selected){
+// Recurrencia (Tareas ISO/ISM y Auditoría): define cada cuánto se espera repetir el registro.
+const RECURRENCIA_OPCIONES = { '':'No se repite', anual:'Anual', semestral:'Cada 6 meses', '30m':'Cada 2 años y medio' };
+const RECURRENCIA_MESES = { anual:12, semestral:6, '30m':30 };
+function recurrenciaLabel(v){ return RECURRENCIA_OPCIONES[v||''] || RECURRENCIA_OPCIONES['']; }
+function recurrenciaOptionsHtml(selected){
   const sel = selected || '';
-  return Object.keys(TISO_RECURRENCIAS).map(k=>`<option value="${k}" ${sel===k?'selected':''}>${TISO_RECURRENCIAS[k]}</option>`).join('');
+  return Object.keys(RECURRENCIA_OPCIONES).map(k=>`<option value="${k}" ${sel===k?'selected':''}>${RECURRENCIA_OPCIONES[k]}</option>`).join('');
 }
-// Próximo vencimiento = fecha del registro + intervalo de recurrencia (12 o 6 meses).
+// Próximo vencimiento = fecha del registro + intervalo de recurrencia.
 function addMeses(fechaISO, meses){
   const d = new Date(fechaISO+'T00:00:00');
   d.setMonth(d.getMonth()+meses);
   return d.toISOString().slice(0,10);
 }
-function computeTisoVencimiento(fechaISO, recurrencia){
-  if(!fechaISO) return '';
-  if(recurrencia==='anual') return addMeses(fechaISO,12);
-  if(recurrencia==='semestral') return addMeses(fechaISO,6);
+function computeVencimientoRecurrente(fechaISO, recurrencia){
+  if(!fechaISO || !RECURRENCIA_MESES[recurrencia]) return '';
+  return addMeses(fechaISO, RECURRENCIA_MESES[recurrencia]);
+}
+// Recurrencia efectiva de un registro, sea Tarea ISO/ISM o Auditoría.
+function recurrenciaDeRegistro(r){
+  if(r.tipo==='TISO') return r.tiso_recurrencia||'';
+  if(r.tipo==='AUD') return r.aud_recurrencia||'';
   return '';
+}
+// Estado de una alerta según la fecha del PRÓXIMO vencimiento únicamente — a diferencia de
+// isOverdue/isDueSoon, NO se apaga si el registro actual está "Cerrado": cerrar esta instancia
+// no cancela la próxima repetición. Devuelve null si no aplica (sin recurrencia o sin fecha).
+function estadoRecurrencia(r){
+  const rec = recurrenciaDeRegistro(r);
+  if(!rec || !r.fecha_vencimiento) return null;
+  const hoy = todayISO();
+  if(r.fecha_vencimiento < hoy) return 'vencida';
+  const limite = new Date(); limite.setDate(limite.getDate()+30);
+  if(r.fecha_vencimiento <= limite.toISOString().slice(0,10)) return 'por_vencer';
+  return 'en_plazo';
 }
 
 
@@ -547,7 +564,7 @@ function isDueSoon(r){
 }
 // Tareas ISO/ISM con recurrencia vencida o por vencer (30 días) — alimenta el contador de "Alertas".
 function tisoAlertRecords(){
-  return DATA.records.filter(r => r.tipo === 'TISO' && (isOverdue(r) || isDueSoon(r)));
+  return DATA.records.filter(r => (r.tipo === 'TISO' || r.tipo === 'AUD') && ['vencida','por_vencer'].includes(estadoRecurrencia(r)));
 }
 function countTisoAlertas(){ return tisoAlertRecords().length; }
 function todasAcciones(r){
@@ -654,11 +671,14 @@ function renderTypeNav(){
   html += label('Reporte de Eventos', 12) + group(NAV_GROUP_EVENTOS);
   html += label('Reportes Proactivos', 12) + group(NAV_ORDER_PROACTIVOS);
   html += label('Capacitación', 12) + group(NAV_GROUP_CAPACITACION);
-  html += label('Tareas ISO/ISM', 12) + group(NAV_GROUP_TAREAS_ISO);
-  html += `<div class="nav-item ${currentTypeFilter==='TISO_ALERTAS'?'active':''}" onclick="setTypeFilter('TISO_ALERTAS')">
-    <span class="nav-dot" style="background:${STATUS['Abierto']}"></span>Alertas
-    <span class="nav-count">${countTisoAlertas()}</span>
-  </div>`;
+  // Tareas ISO/ISM y su panel de Alertas son de uso exclusivo del Responsable HSQE/DPA (visador).
+  if(usuarioActualPuedeVisar()){
+    html += label('Tareas ISO/ISM', 12) + group(NAV_GROUP_TAREAS_ISO);
+    html += `<div class="nav-item ${currentTypeFilter==='TISO_ALERTAS'?'active':''}" onclick="setTypeFilter('TISO_ALERTAS')">
+      <span class="nav-dot" style="background:${STATUS['Abierto']}"></span>Alertas
+      <span class="nav-count">${countTisoAlertas()}</span>
+    </div>`;
+  }
   html += label('Objetivos', 12);
   html += `<div class="nav-item ${currentTypeFilter==='KPI'?'active':''}" onclick="setTypeFilter('KPI')">
     <span class="nav-dot" style="background:#2ECC71"></span>KPI HSQE
@@ -1529,7 +1549,9 @@ function renderAccionesPanel(){
   }
 }
 
-// Panel de Alertas de Tareas ISO/ISM: agrupa las tareas recurrentes vencidas / por vencer.
+// Panel de Alertas: agrupa Tareas ISO/ISM y Auditorías recurrentes, vencidas / por vencer.
+// El estado que se muestra depende SOLO de la fecha del próximo vencimiento (estadoRecurrencia),
+// no de si el registro actual está "Cerrado" — cerrar esta instancia no cancela la próxima repetición.
 function renderIsoAlertasPanel(){
   let panel = document.getElementById('isoAlertasPanel');
   if(!panel){
@@ -1539,27 +1561,30 @@ function renderIsoAlertasPanel(){
     document.querySelector('.main').appendChild(panel);
   }
   const site = currentSiteFilter;
-  let list = DATA.records.filter(r => r.tipo === 'TISO' && (site==='ALL' || r.instalacion===site));
+  // Todas las Tareas ISO/ISM (aunque no repitan) + solo las Auditorías que sí tienen recurrencia definida.
+  let list = DATA.records.filter(r => (r.tipo === 'TISO' || (r.tipo === 'AUD' && r.aud_recurrencia)) && (site==='ALL' || r.instalacion===site));
   list.sort((a,b) => (a.fecha_vencimiento||'9999-99-99').localeCompare(b.fecha_vencimiento||'9999-99-99'));
   let vencidas=0, porVencer=0;
   list.forEach(r=>{
-    if(!r.tiso_recurrencia) return;
-    if(isOverdue(r)) vencidas++;
-    else if(isDueSoon(r)) porVencer++;
+    const e = estadoRecurrencia(r);
+    if(e==='vencida') vencidas++;
+    else if(e==='por_vencer') porVencer++;
   });
+  const ESTADO_TXT = { vencida:'Vencida', por_vencer:'Por vencer', en_plazo:'En plazo' };
+  const ESTADO_COLOR = { vencida:'#C0392B', por_vencer:'#B07D0A', en_plazo:'#1E7A4A' };
   const rows = list.map(r=>{
-    const vencida = isOverdue(r);
-    const porVenc = isDueSoon(r);
-    const estadoTxt = esCerrado(r.estado) ? 'Cerrado' : (vencida ? 'Vencida' : (porVenc ? 'Por vencer' : (r.tiso_recurrencia ? 'En plazo' : '—')));
-    const estadoColor = esCerrado(r.estado) ? '#1E7A4A' : (vencida ? '#C0392B' : (porVenc ? '#B07D0A' : '#8B96A1'));
+    const e = estadoRecurrencia(r); // null | 'vencida' | 'por_vencer' | 'en_plazo'
+    const estadoTxt = e ? ESTADO_TXT[e] : '—';
+    const estadoColor = e ? ESTADO_COLOR[e] : '#8B96A1';
     return `<tr style="cursor:pointer;" onclick="openRecordForm('${r.id}')" title="Abrir registro para editar">
       <td><span class="id-tag">${codigoMostrado(r)}</span></td>
+      <td><span class="type-tag" style="background:${TYPES[r.tipo].color}20;color:${TYPES[r.tipo].color}">${TYPES[r.tipo].label}</span></td>
       <td class="desc-cell" style="font-size:11.5px;">${r.titulo||'—'}</td>
       <td>${r.instalacion||'—'}</td>
       <td class="mono" style="font-size:12px;white-space:nowrap;">${fmtDate(r.fecha)}</td>
-      <td>${recurrenciaLabel(r.tiso_recurrencia)}</td>
+      <td>${recurrenciaLabel(recurrenciaDeRegistro(r))}</td>
       <td>${r.responsable||'—'}</td>
-      <td class="mono ${vencida?'overdue':''}" style="font-size:12px;white-space:nowrap;">${vencida?'⚠ ':''}${r.fecha_vencimiento?fmtDate(r.fecha_vencimiento):'—'}</td>
+      <td class="mono ${e==='vencida'?'overdue':''}" style="font-size:12px;white-space:nowrap;">${e==='vencida'?'⚠ ':''}${r.fecha_vencimiento?fmtDate(r.fecha_vencimiento):'—'}</td>
       <td><div class="status-cell" style="white-space:nowrap;"><span class="status-dot" style="background:${estadoColor}"></span>${estadoTxt}</div></td>
     </tr>`;
   }).join('');
@@ -1567,12 +1592,12 @@ function renderIsoAlertasPanel(){
     <div class="kpi-row" style="margin-bottom:18px;">
       <div class="kpi-card alert"><div class="val">${vencidas}</div><div class="lbl">Vencidas</div></div>
       <div class="kpi-card"><div class="val">${porVencer}</div><div class="lbl">Por vencer (30 días)</div></div>
-      <div class="kpi-card"><div class="val">${list.length}</div><div class="lbl">Tareas ISO/ISM cargadas</div></div>
+      <div class="kpi-card"><div class="val">${list.length}</div><div class="lbl">Registros cargados</div></div>
     </div>
-    <div style="font-size:12px;color:var(--graphite);margin-bottom:10px;">Solo se generan alertas para tareas con recurrencia (Anual / Cada 6 meses). Tocá una fila para abrir el registro.</div>
+    <div style="font-size:12px;color:var(--graphite);margin-bottom:10px;">Se listan las Tareas ISO/ISM y las Auditorías con recurrencia (Anual / Cada 6 meses / Cada 2 años y medio). El estado refleja la fecha del próximo vencimiento, independientemente de si el registro actual está cerrado. Tocá una fila para abrir el registro.</div>
     <div id="tableWrapIsoAlertas"><table>
-      <thead><tr><th>ID</th><th>Título</th><th>Sitio</th><th>Última fecha</th><th>Recurrencia</th><th>Responsable</th><th>Próximo vencimiento</th><th>Estado</th></tr></thead>
-      <tbody>${rows || '<tr><td colspan="8" style="text-align:center;color:var(--graphite-light);padding:20px;">No hay Tareas ISO/ISM cargadas.</td></tr>'}</tbody>
+      <thead><tr><th>ID</th><th>Tipo</th><th>Título</th><th>Sitio</th><th>Última fecha</th><th>Recurrencia</th><th>Responsable</th><th>Próximo vencimiento</th><th>Estado</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="9" style="text-align:center;color:var(--graphite-light);padding:20px;">No hay registros recurrentes cargados.</td></tr>'}</tbody>
     </table></div>`;
 }
 
@@ -1605,7 +1630,7 @@ function setKpiViewMode(kpiMode){
     if(label) label.textContent = 'Plan de acciones';
     if(printBtn) printBtn.textContent = '\uD83D\uDDA8 Imprimir plan de acciones (PDF)';
   } else if(isoAlertMode){
-    if(label) label.textContent = 'Alertas \u2014 Tareas ISO/ISM';
+    if(label) label.textContent = 'Alertas';
     if(printBtn) printBtn.textContent = '\uD83D\uDDA8 Imprimir alertas (PDF)';
   } else if(printBtn){
     printBtn.textContent = '\uD83D\uDDA8 Imprimir graficos (PDF)';
@@ -1636,8 +1661,8 @@ function renderAll(){
     document.getElementById('viewMeta').textContent = 'Acciones correctivas y preventivas de todos los registros (solo consulta)';
     renderAccionesPanel();
   } else if(isoAlertMode){
-    document.getElementById('viewTitle').textContent = 'Alertas — Tareas ISO/ISM';
-    document.getElementById('viewMeta').textContent = 'Tareas recurrentes vencidas o por vencer (30 días)';
+    document.getElementById('viewTitle').textContent = 'Alertas';
+    document.getElementById('viewMeta').textContent = 'Tareas ISO/ISM y Auditorías recurrentes, vencidas o por vencer (30 días)';
     renderIsoAlertasPanel();
   } else if(kpiMode){
     document.getElementById('viewTitle').textContent = 'KPI HSQE';
@@ -1687,7 +1712,7 @@ function openRecordForm(id){
         <div class="section-title">Clasificación</div>
         <div class="field-row">
           <div class="field"><label>Tipo de evento</label>
-            <select id="f_tipo">${Object.keys(TYPES).map(k=>`<option value="${k}" ${k===tipo?'selected':''}>${TYPES[k].label}</option>`).join('')}</select>
+            <select id="f_tipo">${Object.keys(TYPES).filter(k=>k!=='TISO' || usuarioActualPuedeVisar()).map(k=>`<option value="${k}" ${k===tipo?'selected':''}>${TYPES[k].label}</option>`).join('')}</select>
           </div>
           <div class="field"><label>Cliente / Operación</label>
             <select id="f_cliente">${clienteOptionsHtml(r ? r.cliente_operacion : 'No Asignado a Cliente')}</select>
@@ -1768,7 +1793,7 @@ function openRecordForm(id){
           </div>
           <div class="field-row">
             <div class="field"><label>Recurrencia</label>
-              <select id="f_tiso_recurrencia">${tisoRecurrenciaOptionsHtml(r?r.tiso_recurrencia||'':'')}</select>
+              <select id="f_tiso_recurrencia">${recurrenciaOptionsHtml(r?r.tiso_recurrencia||'':'')}</select>
             </div>
             <div class="field"><label>Responsable</label>
               <select id="f_tiso_responsable">${cargoOptionsHtml(r?r.responsable||'':'')}</select>
@@ -2031,6 +2056,10 @@ function openRecordForm(id){
           <div class="field"><label>Auditor</label>
             <input type="text" id="f_aud_auditor" value="${r?(r.aud_auditor||'').replace(/"/g,'&quot;'):''}" placeholder="Nombre del auditor">
           </div>
+          <div class="field"><label>¿Se repite?</label>
+            <select id="f_aud_recurrencia" onchange="updateAudVencimientoSugerido()">${recurrenciaOptionsHtml(r?r.aud_recurrencia||'':'')}</select>
+          </div>
+          <div style="font-size:11px;color:var(--graphite-light);margin:-6px 0 10px;">Si se repite, se sugiere la fecha de la próxima auditoría en "Fecha de vencimiento" (sección Gestión, más abajo) — la podés ajustar antes de guardar.</div>
           <div class="section-title with-btn" style="margin-top:8px;">
             <span style="font-size:12.5px;">Hallazgos</span>
             <button type="button" class="btn secondary" style="padding:5px 10px;" onclick="addHallazgo()">+ Agregar hallazgo</button>
@@ -2070,7 +2099,7 @@ function openRecordForm(id){
             <select id="f_estado" onchange="validateEstadoCierre(this)">${Object.keys(STATUS).map(s=>`<option ${r&&r.estado===s?'selected':''}>${s}</option>`).join('')}</select>
           </div>
         </div>
-        <div class="field" id="block_venc_aud" style="display:none;"><label>Fecha de vencimiento</label>
+        <div class="field" id="block_venc_aud" style="display:none;"><label id="label_venc_aud">Fecha de vencimiento</label>
           <input type="date" id="f_venc_aud" value="${r?r.fecha_vencimiento||'':''}">
         </div>
         <div class="field"><label>Fecha de cierre (si corresponde)</label>
@@ -2470,6 +2499,8 @@ function toggleConditionalFields(){
   document.getElementById('block_aud').style.display = esAud ? 'block' : 'none';
   document.getElementById('block_insp').style.display = esInsp ? 'block' : 'none';
   document.getElementById('block_venc_aud').style.display = (esAud || esInsp) ? 'block' : 'none';
+  if(esAud) setLbl('label_venc_aud', 'Fecha de vencimiento / próxima auditoría');
+  else if(esInsp) setLbl('label_venc_aud', 'Fecha de vencimiento');
   document.getElementById('block_reportado').style.display = (esCap || esAud || esInsp || esTiso) ? 'none' : 'block';
   document.getElementById('block_gestion').style.display = (esSug || esCap) ? 'none' : 'block';
   document.getElementById('block_cuasi').style.display = (tipo === 'CUA') ? 'block' : 'none';
@@ -2522,6 +2553,17 @@ function toggleLesionBlock(){
   const mostrar = (tipo === 'ACC') || (tipo === 'CUA' && (naturaleza === 'Personal' || naturaleza === 'Ambas'));
   document.getElementById('block_lesion').style.display = mostrar ? 'block' : 'none';
 }
+// Al elegir una recurrencia para la Auditoría, sugiere la fecha de la próxima auditoría
+// en "Fecha de vencimiento" (el usuario puede ajustarla antes de guardar).
+function updateAudVencimientoSugerido(){
+  const rec = getIfVal('f_aud_recurrencia');
+  if(!rec) return; // "No se repite": no tocar el campo manual
+  const fecha = getIfVal('f_fecha');
+  const nueva = computeVencimientoRecurrente(fecha, rec);
+  const vencEl = document.getElementById('f_venc_aud');
+  if(nueva && vencEl) vencEl.value = nueva;
+}
+function getIfVal(id){ const el = document.getElementById(id); return el ? el.value : ''; }
 function humanFileSize(bytes){
   if(bytes < 1024) return bytes + ' B';
   if(bytes < 1024*1024) return (bytes/1024).toFixed(0) + ' KB';
@@ -2819,7 +2861,8 @@ async function saveRecord(){
     medio_comunicacion: getIf('f_medio_comunicacion'),
     plazo_comunicacion: getIf('f_plazo_comunicacion'),
     responsable: esSug ? getIf('f_sug_resp') : (esTiso ? getIf('f_tiso_responsable') : (tipoSinAcciones ? get('f_responsable') : '')),
-    fecha_vencimiento: esSug ? getIf('f_sug_plazo_seg') : ((esAud || esInsp) ? getIf('f_venc_aud') : (esTiso ? computeTisoVencimiento(fechaSel, getIf('f_tiso_recurrencia')) : (tipoSinAcciones ? get('f_vencimiento') : ''))),
+    fecha_vencimiento: esSug ? getIf('f_sug_plazo_seg') : ((esAud || esInsp) ? getIf('f_venc_aud') : (esTiso ? computeVencimientoRecurrente(fechaSel, getIf('f_tiso_recurrencia')) : (tipoSinAcciones ? get('f_vencimiento') : ''))),
+    aud_recurrencia: esAud ? getIf('f_aud_recurrencia') : '',
     fecha_cierre: esSug ? getIf('f_sug_cierre') : get('f_cierre'),
     referencia_normativa: get('f_referencia'),
     sug_area: esSug ? getIf('f_sug_area') : '',
@@ -3406,18 +3449,21 @@ async function printChartsReport(){
 
   if(currentTypeFilter === 'TISO_ALERTAS'){
     const site = currentSiteFilter;
-    const list = DATA.records.filter(r => r.tipo === 'TISO' && (site==='ALL' || r.instalacion===site));
+    const list = DATA.records.filter(r => (r.tipo === 'TISO' || (r.tipo === 'AUD' && r.aud_recurrencia)) && (site==='ALL' || r.instalacion===site));
     list.sort((a,b) => (a.fecha_vencimiento||'9999-99-99').localeCompare(b.fecha_vencimiento||'9999-99-99'));
+    const ESTADO_TXT = { vencida:'Vencida', por_vencer:'Por vencer', en_plazo:'En plazo' };
     const th = (t) => `<th style="border:1px solid #DBE0E6;padding:5px 7px;background:#F2F5F8;text-align:left;">${t}</th>`;
     const filasHtml = list.map(r=>{
-      const vencida = isOverdue(r);
-      const estadoTxt = esCerrado(r.estado) ? 'Cerrado' : (vencida ? 'Vencida' : (isDueSoon(r) ? 'Por vencer' : (r.tiso_recurrencia ? 'En plazo' : '—')));
+      const e = estadoRecurrencia(r);
+      const vencida = e === 'vencida';
+      const estadoTxt = e ? ESTADO_TXT[e] : '—';
       return `<tr>
         <td style="border:1px solid #DBE0E6;padding:5px 7px;font-family:'IBM Plex Mono',monospace;font-size:8.5pt;">${codigoMostrado(r)}</td>
+        <td style="border:1px solid #DBE0E6;padding:5px 7px;">${TYPES[r.tipo].label}</td>
         <td style="border:1px solid #DBE0E6;padding:5px 7px;">${r.titulo||'—'}</td>
         <td style="border:1px solid #DBE0E6;padding:5px 7px;">${r.instalacion||'—'}</td>
         <td style="border:1px solid #DBE0E6;padding:5px 7px;white-space:nowrap;">${fmtDate(r.fecha)}</td>
-        <td style="border:1px solid #DBE0E6;padding:5px 7px;">${recurrenciaLabel(r.tiso_recurrencia)}</td>
+        <td style="border:1px solid #DBE0E6;padding:5px 7px;">${recurrenciaLabel(recurrenciaDeRegistro(r))}</td>
         <td style="border:1px solid #DBE0E6;padding:5px 7px;">${r.responsable||'—'}</td>
         <td style="border:1px solid #DBE0E6;padding:5px 7px;white-space:nowrap;color:${vencida?'#C0392B':'#333'};">${vencida?'⚠ ':''}${r.fecha_vencimiento?fmtDate(r.fecha_vencimiento):'—'}</td>
         <td style="border:1px solid #DBE0E6;padding:5px 7px;">${estadoTxt}</td>
@@ -3427,15 +3473,15 @@ async function printChartsReport(){
       <table style="width:100%;border-collapse:collapse;margin-bottom:14px;">
         <tr>
           <td style="width:70%;vertical-align:middle;border-bottom:3px solid #002247;padding-bottom:8px;">
-            <div class="pr-title">INTEGRA · MÓDULO HSQE — ALERTAS TAREAS ISO/ISM</div>
-            <div class="pr-sub">${co?co.name:''}${currentSiteFilter!=='ALL' ? ' — '+currentSiteFilter : ''} · ${list.length} tarea(s) · Generado el ${fechaHora}</div>
+            <div class="pr-title">INTEGRA · MÓDULO HSQE — ALERTAS</div>
+            <div class="pr-sub">${co?co.name:''}${currentSiteFilter!=='ALL' ? ' — '+currentSiteFilter : ''} · ${list.length} registro(s) · Generado el ${fechaHora}</div>
           </td>
           <td style="width:30%;text-align:right;">${logo?`<img src="${logo}" style="max-height:60px;max-width:160px;">`:''}</td>
         </tr>
       </table>
       <table style="width:100%;border-collapse:collapse;font-size:9pt;">
-        <tr>${th('ID')}${th('Título')}${th('Sitio')}${th('Última fecha')}${th('Recurrencia')}${th('Responsable')}${th('Próximo vencimiento')}${th('Estado')}</tr>
-        ${filasHtml || '<tr><td colspan="8" style="border:1px solid #DBE0E6;padding:12px;text-align:center;color:#8B96A1;">Sin Tareas ISO/ISM cargadas.</td></tr>'}
+        <tr>${th('ID')}${th('Tipo')}${th('Título')}${th('Sitio')}${th('Última fecha')}${th('Recurrencia')}${th('Responsable')}${th('Próximo vencimiento')}${th('Estado')}</tr>
+        ${filasHtml || '<tr><td colspan="9" style="border:1px solid #DBE0E6;padding:12px;text-align:center;color:#8B96A1;">Sin registros recurrentes cargados.</td></tr>'}
       </table>
     </div>`;
     const imgs = Array.from(container.querySelectorAll('img'));
@@ -3715,6 +3761,8 @@ async function composeRecordBody(id){
     metaCells.push({l:'Interna / Externa', v:r.aud_alcance||'—'});
     metaCells.push({l:'Norma / Tipo', v:r.aud_norma||'—'});
     metaCells.push({l:'Auditor', v:r.aud_auditor||'—'});
+    metaCells.push({l:'Recurrencia', v:recurrenciaLabel(r.aud_recurrencia)});
+    metaCells.push({l:'Próxima auditoría', v:r.fecha_vencimiento?fmtDate(r.fecha_vencimiento):'—'});
     metaCells.push({l:'Estado actual', v:r.estado||'—'});
   } else if(r.tipo==='INSP'){
     metaCells.push({l:'Interna / Externa', v:r.insp_alcance||'—'});
@@ -4149,7 +4197,7 @@ async function previewRecordPDF(id){
 }
 
 /* ============ INIT ============ */
-Object.assign(window, { addAccion, addAttachmentFile, addAttachmentManual, addCatalogItem, addDotacionMes, addInvestigador, addLeccion, addCapParticipante, addHallazgo, addObservacion, addVessel, addVisador, clearFilters, closeModal, deleteRecord, exportData, printRecordPDF, openAttachment, openCatalogManager, openRecordForm, openVisadoresManager, printChartsReport, printCompanyReport, removeAccion, removeAttachment, removeCatalogItem, removeDotacionMes, removeInvestigador, removeLeccion, removeCapParticipante, removeHallazgo, removeObservacion, removeVessel, removeVisador, renderAll, renderTopbar, topbarSearch, renderAuditNcKpi, renderOcimfKpi, renderScoreCard, setScoreCardYear, setScoreCardTarget, renderTable, saveRecord, setCompanyLogo, updateSitioTipo, setSiteFilter, setClienteFilter, setTypeFilter, toggleCategoriaOtro, toggleTipificacionCausaOtro, toggleVisado, updateAccionField, updateInvestigadorField, updateCapParticipanteField, updateHallazgoField, updateObservacionField, updateVesselOptions, updateCargoField, addCargo, removeCargo, validateEstadoCierre, refreshData, logoutHsqe, previewRecordPDF });
+Object.assign(window, { addAccion, addAttachmentFile, addAttachmentManual, addCatalogItem, addDotacionMes, addInvestigador, addLeccion, addCapParticipante, addHallazgo, addObservacion, addVessel, addVisador, clearFilters, closeModal, deleteRecord, exportData, printRecordPDF, openAttachment, openCatalogManager, openRecordForm, openVisadoresManager, printChartsReport, printCompanyReport, removeAccion, removeAttachment, removeCatalogItem, removeDotacionMes, removeInvestigador, removeLeccion, removeCapParticipante, removeHallazgo, removeObservacion, removeVessel, removeVisador, renderAll, renderTopbar, topbarSearch, renderAuditNcKpi, renderOcimfKpi, renderScoreCard, setScoreCardYear, setScoreCardTarget, renderTable, saveRecord, setCompanyLogo, updateSitioTipo, setSiteFilter, setClienteFilter, setTypeFilter, toggleCategoriaOtro, toggleTipificacionCausaOtro, toggleVisado, updateAccionField, updateInvestigadorField, updateCapParticipanteField, updateHallazgoField, updateObservacionField, updateVesselOptions, updateCargoField, addCargo, removeCargo, validateEstadoCierre, refreshData, logoutHsqe, previewRecordPDF, updateAudVencimientoSugerido });
 
 async function logoutHsqe(){
   await supabase.auth.signOut();
