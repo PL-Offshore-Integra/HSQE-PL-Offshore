@@ -1585,12 +1585,15 @@ function renderProgramadosPanel(){
     </tr>`;
   }).join('');
   panel.innerHTML = `
+    <div style="display:flex;justify-content:flex-end;margin-bottom:12px;">
+      <button class="btn" onclick="openRecordForm(null,'PROG')">+ Nueva tarea programada</button>
+    </div>
     <div class="kpi-row" style="margin-bottom:18px;">
       <div class="kpi-card alert"><div class="val">${vencidos}</div><div class="lbl">Vencidos</div></div>
       <div class="kpi-card"><div class="val">${porVencer}</div><div class="lbl">Por vencer (30 días)</div></div>
       <div class="kpi-card"><div class="val">${list.length}</div><div class="lbl">Programados pendientes</div></div>
     </div>
-    <div style="font-size:12px;color:var(--graphite);margin-bottom:10px;">Cada fila es la próxima repetición pendiente de una Tarea ISO/ISM o Auditoría. Abrila para atenderla; al marcarla "Cerrado" se genera automáticamente el siguiente Programado y esta desaparece de esta lista.</div>
+    <div style="font-size:12px;color:var(--graphite);margin-bottom:10px;">Cada fila es la próxima repetición pendiente de una Tarea ISO/ISM o Auditoría, o una tarea puntual cargada manualmente. Abrila para atenderla; al marcarla "Cerrado" se genera automáticamente el siguiente Programado (si tiene recurrencia) y esta desaparece de esta lista.</div>
     <div id="tableWrapProgramados"><table>
       <thead><tr><th>ID</th><th>Título</th><th>Registro madre</th><th>Sitio</th><th>Recurrencia</th><th>Responsable</th><th>Vencimiento</th><th>Estado</th></tr></thead>
       <tbody>${rows || '<tr><td colspan="8" style="text-align:center;color:var(--graphite-light);padding:20px;">No hay Programados pendientes.</td></tr>'}</tbody>
@@ -1688,11 +1691,13 @@ function renderAll(){
 }
 
 /* ============ FORM / MODAL ============ */
-function openRecordForm(id){
+function openRecordForm(id, forceTipo){
   editingId = id || null;
   const r = id ? DATA.records.find(x=>x.id===id) : null;
   const co = r ? r.empresa_id : (DATA.companies[0]?.id || '');
-  const tipo = r ? r.tipo : (TYPES[currentTypeFilter] ? currentTypeFilter : 'OBS');
+  // forceTipo: abre el formulario "Nuevo registro" ya en un tipo puntual (ej. Programado manual
+  // desde el panel de Programados), aunque ese tipo no sea el filtro de sección actual.
+  const tipo = r ? r.tipo : (forceTipo && TYPES[forceTipo] ? forceTipo : (TYPES[currentTypeFilter] ? currentTypeFilter : 'OBS'));
 
   // Reportado por (nombre + cargo). Compatibilidad con registros viejos que guardaban "Nombre / Cargo".
   const repNombre = r ? (r.reportado_nombre != null ? r.reportado_nombre : ((r.reportado_por||'').split('/')[0]||'').trim()) : '';
@@ -1805,10 +1810,21 @@ function openRecordForm(id){
         </div>
         <div id="block_prog">
           ${(() => {
-            const origen = r ? DATA.records.find(x=>x.id===r.origen_registro_id) : null;
-            const origenTxt = origen ? `${TYPES[origen.tipo] ? TYPES[origen.tipo].label : origen.tipo} ${codigoMostrado(origen)}` : (r ? (r.origen_registro_tipo||'—') : '—');
-            return `<div style="font-size:11px;color:var(--graphite-light);margin:-8px 0 10px;">Generado automáticamente desde <b>${origenTxt}</b> · Recurrencia: <b>${recurrenciaLabel(r?r.prog_recurrencia||'':'')}</b>. Al marcar este registro como "Cerrado" se genera automáticamente el siguiente Programado.<br>¿Necesitás atenderlo con el formulario completo (por ej. cargar los hallazgos de la auditoría)? Cambiá "Tipo de evento" arriba por el tipo que corresponda y completalo — se va a guardar como un registro nuevo y este Programado va a quedar cerrado como historial.</div>`;
+            // Manual = cargado directo desde el panel de Programados (no viene de cerrar una
+            // Tarea ISO/ISM, Auditoría, u otro Programado con recurrencia).
+            const esManual = !(r && r.origen_registro_id);
+            if(esManual){
+              return `<div style="font-size:11px;color:var(--graphite-light);margin:-8px 0 10px;">Tarea programada cargada manualmente. La fecha de arriba es su vencimiento: cuando falten 30 días o menos la vas a ver marcada "Por vencer" en este panel y en el contador del menú.</div>`;
+            }
+            const origen = DATA.records.find(x=>x.id===r.origen_registro_id);
+            const origenTxt = origen ? `${TYPES[origen.tipo] ? TYPES[origen.tipo].label : origen.tipo} ${codigoMostrado(origen)}` : (r.origen_registro_tipo||'—');
+            return `<div style="font-size:11px;color:var(--graphite-light);margin:-8px 0 10px;">Generado automáticamente desde <b>${origenTxt}</b> · Recurrencia: <b>${recurrenciaLabel(r.prog_recurrencia||'')}</b>. Al marcar este registro como "Cerrado" se genera automáticamente el siguiente Programado.<br>¿Necesitás atenderlo con el formulario completo (por ej. cargar los hallazgos de la auditoría)? Cambiá "Tipo de evento" arriba por el tipo que corresponda y completalo — se va a guardar como un registro nuevo y este Programado va a quedar cerrado como historial.</div>`;
           })()}
+          ${!(r && r.origen_registro_id) ? `<div class="field-row">
+            <div class="field"><label>Recurrencia (opcional)</label>
+              <select id="f_prog_manual_recurrencia">${recurrenciaOptionsHtml(r?r.prog_recurrencia||'':'')}</select>
+            </div>
+          </div>` : ''}
           <div class="field"><label>Responsable</label>
             <select id="f_prog_responsable">${cargoOptionsHtml(r?r.responsable||'':'')}</select>
           </div>
@@ -2798,6 +2814,12 @@ async function saveRecord(){
     area: get('f_area'),
     titulo: esTiso ? getIf('f_tiso_titulo') : get('f_titulo'),
     tiso_recurrencia: esTiso ? getIf('f_tiso_recurrencia') : '',
+    // Recurrencia de un Programado cargado manualmente (sin registro madre). Para uno vinculado a
+    // una Tarea ISO/ISM o Auditoría, se pisa más abajo con la del vínculo — ver bloque editingId+esProg.
+    prog_recurrencia: esProg ? getIf('f_prog_manual_recurrencia') : '',
+    origen_automatico: false,
+    origen_registro_id: '',
+    origen_registro_tipo: '',
     descripcion: descripcionPrincipal,
     inc_descripcion: esInc ? incDescripcion : null,
     reportado_nombre: get('f_reportado_nombre').trim(),
@@ -3082,7 +3104,7 @@ function manageProgramados(rec, estadoAnterior){
       estado: 'Abierto',
       fecha_vencimiento: vencimiento,
       fecha_cierre: '',
-      referencia_normativa: `Generado automáticamente desde ${madreTipo} ${madreId}`,
+      referencia_normativa: madreId ? `Generado automáticamente desde ${madreTipo} ${madreId}` : 'Generado automáticamente al cerrar el Programado manual anterior (misma recurrencia)',
       acciones_correctivas: [], acciones_preventivas: [],
       adjuntos: [], lecciones_aprendidas: [],
       origen_automatico: true,
