@@ -1032,7 +1032,7 @@ function renderScoreCard(){
     { key:'nnc_buq_ext', kpi:'NNC Buques en Aud. Externas ISM',    kind:'count', fn:(i,f)=>ncCount(['ISM'],'Externa','Buques',i,f) },
     { key:'nnc_buq_int', kpi:'NNC Buques en Aud. Internas ISM',    kind:'count', fn:(i,f)=>ncCount(['ISM'],'Interna','Buques',i,f) },
     { key:'cap_hsqe_buq', kpi:'Capacitaciones HSQE en buques',     kind:'count', dir:'max', fn:(i,f)=>capCount('HSQE',i,f) },
-    { key:'aci',         kpi:'Actos y Condiciones Inseguras',      kind:'count', fn:(i,f)=>aciCount(i,f) },
+    { key:'aci',         kpi:'Actos y Condiciones Inseguras',      kind:'count', dir:'max', fn:(i,f)=>aciCount(i,f) },
   ];
 
   const fmt = v => v===null ? 's/d' : (Number.isInteger(v) ? String(v) : v.toFixed(2));
