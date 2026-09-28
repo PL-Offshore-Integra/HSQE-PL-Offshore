@@ -793,7 +793,7 @@ function renderKPIs(){
 const OCIMF_EXPOSURE_CREW = 12;
 const OCIMF_HOURS_PER_DAY = 24;
 const OCIMF_MULTIPLIER = 1000000;
-const SCORECARD_DEFAULT_TARGETS = { trcf:20, ltif:20, nnc_cia_ext:4, nnc_cia_int:4, nnc_buq_ext:4, nnc_buq_int:4, cap_hsqe_buq:4 };
+const SCORECARD_DEFAULT_TARGETS = { trcf:20, ltif:20, nnc_cia_ext:4, nnc_cia_int:4, nnc_buq_ext:4, nnc_buq_int:4, cap_hsqe_buq:4, aci:20 };
 // Tipificación de sitios: cuáles son buques (para KPIs por ámbito). Se define en el catálogo.
 function ensureSitiosTipo(){
   const co = DATA.companies[0];
@@ -1001,6 +1001,7 @@ function renderScoreCard(){
   const accAll = filteredRecords(true).filter(r => r.tipo==='ACC' && r.incluir_kpi);
   const ncAll  = filteredRecords(true).filter(r => r.tipo==='NC');
   const capAll = filteredRecords(true).filter(r => r.tipo==='CAP');
+  const aciAll = filteredRecords(true).filter(r => r.tipo==='AI' || r.tipo==='CI');
   ensureSitiosTipo();
   const capCount = (tipoCap, ini, fin) => (fin < ini) ? 0 : capAll.filter(r =>
     r.fecha>=ini && r.fecha<=fin && (r.cap_tipo||'') === tipoCap && sitioEsBuque(r.instalacion)
@@ -1021,6 +1022,7 @@ function renderScoreCard(){
     orig.includes(r.clasificacion_origen) &&
     r.tipo_auditoria===aud && r.ambito_auditoria===amb
   ).length;
+  const aciCount = (ini, fin) => (fin < ini) ? 0 : aciAll.filter(r => r.fecha>=ini && r.fecha<=fin).length;
 
   const rows = [
     { key:'trcf',        kpi:'Accidentes personales TRCF',         kind:'rate',  fn:(i,f)=>rate(['LTI','MTI','RWC'],i,f) },
@@ -1030,6 +1032,7 @@ function renderScoreCard(){
     { key:'nnc_buq_ext', kpi:'NNC Buques en Aud. Externas ISM',    kind:'count', fn:(i,f)=>ncCount(['ISM'],'Externa','Buques',i,f) },
     { key:'nnc_buq_int', kpi:'NNC Buques en Aud. Internas ISM',    kind:'count', fn:(i,f)=>ncCount(['ISM'],'Interna','Buques',i,f) },
     { key:'cap_hsqe_buq', kpi:'Capacitaciones HSQE en buques',     kind:'count', dir:'max', fn:(i,f)=>capCount('HSQE',i,f) },
+    { key:'aci',         kpi:'Actos y Condiciones Inseguras',      kind:'count', fn:(i,f)=>aciCount(i,f) },
   ];
 
   const fmt = v => v===null ? 's/d' : (Number.isInteger(v) ? String(v) : v.toFixed(2));
