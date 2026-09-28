@@ -1104,9 +1104,9 @@ function renderScoreCard(){
       <table id="scoreCardTable" style="width:100%;border-collapse:collapse;font-size:12.5px;background:#fff;">
         <thead>
           <tr>
-            <th style="background:#E9EDF1;text-align:left;padding:6px 10px;border:1px solid #DBE0E6;">KPI</th>
-            <th style="background:#E9EDF1;text-align:center;padding:6px 8px;border:1px solid #DBE0E6;">Resultado ${y-1}</th>
-            <th style="background:#FFF3B0;text-align:center;padding:6px 8px;border:1px solid #DBE0E6;">Target ${y}</th>
+            <th style="background:#E9EDF1;color:var(--navy);text-align:left;padding:6px 10px;border:1px solid #DBE0E6;">KPI</th>
+            <th style="background:#E9EDF1;color:var(--navy);text-align:center;padding:6px 8px;border:1px solid #DBE0E6;">Resultado ${y-1}</th>
+            <th style="background:#FFF3B0;color:#5B4C00;text-align:center;padding:6px 8px;border:1px solid #DBE0E6;">Target ${y}</th>
             ${thQ}
             <th style="background:#1E7A4A;color:#fff;text-align:center;padding:6px 8px;border:1px solid #DBE0E6;">TOTAL</th>
           </tr>
