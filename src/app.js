@@ -16,6 +16,7 @@ const TYPES = {
   AI:  {label:'Acto Inseguro',       color:'#B07D0A'},
   CI:  {label:'Condición Insegura',  color:'#B07D0A'},
   SUG: {label:'Sugerencia de Mejora', color:'#0E7C86'},
+  RP:  {label:'Reporte Positivo',    color:'#3FA34D'},
   CAP: {label:'Capacitación',        color:'#7A4FA0'},
   AUD: {label:'Auditoría',           color:'#3E6B8C'},
   INSP:{label:'Inspección',          color:'#2F8F83'},
@@ -34,6 +35,7 @@ const TIPO_DESCRIPTOR = {
   AI:  'del acto inseguro',
   CI:  'de la condición insegura',
   SUG: 'de la sugerencia de mejora',
+  RP:  'del reporte positivo',
   CAP: 'de la capacitación',
   AUD: 'de la auditoría',
   INSP: 'de la inspección',
@@ -49,6 +51,7 @@ const EN = {
   'Lección Aprendida':'Lesson Learned','Accidente Personal':'Personal Accident','Incidente':'Incident',
   'Cuasi Accidente':'Near Miss','Acto Inseguro':'Unsafe Act','Condición Insegura':'Unsafe Condition',
   'Sugerencia de Mejora':'Improvement Suggestion',
+  'Reporte Positivo':'Positive Report',
   'Capacitación':'Training',
   'Tareas ISO/ISM':'ISO/ISM Tasks','Recurrencia':'Recurrence','Título de la tarea':'Task title',
   'Programado':'Scheduled','Registro madre':'Source record',
@@ -78,6 +81,7 @@ const EN = {
   'Descripción de la oportunidad de mejora':'Improvement Opportunity Description','Descripción de la lección aprendida':'Lesson Learned Description',
   'Descripción del acto inseguro':'Unsafe Act Description','Descripción de la condición insegura':'Unsafe Condition Description',
   'Descripción de la sugerencia de mejora':'Improvement Suggestion Description',
+  'Descripción del reporte positivo':'Positive Report Description',
   // Portada / gráficos
   'Registros por tipo':'Records by type','Por estado':'By status','Por instalación':'By site',
   'Por severidad':'By severity','Por causa raíz':'By root cause','¿Se llevará a cabo?':'Will it be carried out?',
@@ -92,11 +96,13 @@ const EN = {
   'Estado actual':'Current status','Responsable':'Responsible','Reportado por':'Reported by',
   'Fecha de vencimiento':'Due date','Fecha de cierre':'Closing date','Referencia normativa':'Regulatory reference',
   'Área responsable':'Responsible area',
+  '¿Informado a las gerencias?':'Reported to management?','Fecha de información a gerencias':'Management notification date',
   // Fecha por tipo
   'Fecha del evento':'Event date','Fecha del incidente':'Incident date','Fecha del accidente personal':'Personal accident date',
   'Fecha del cuasi accidente':'Near miss date','Fecha de la no conformidad':'Non-conformity date','Fecha de la observación':'Observation date',
   'Fecha de la oportunidad de mejora':'Improvement opportunity date','Fecha de la lección aprendida':'Lesson learned date',
   'Fecha del acto inseguro':'Unsafe act date','Fecha de la condición insegura':'Unsafe condition date','Fecha de la sugerencia de mejora':'Improvement suggestion date',
+  'Fecha del reporte positivo':'Positive Report date',
   // Condiciones del incidente
   'Fuerza del viento':'Wind force','Estado del mar':'Sea state','Fuente de luz':'Light source',
   'Temperatura exterior (°C)':'Outside temperature (°C)','Temperatura ambiente (°C)':'Ambient temperature (°C)',
@@ -169,7 +175,7 @@ let CLASIF_ORIGEN = ['','ISO','ISM','PNA','Inspección HSQE','Cliente','No Aplic
 // Oportunidad de Mejora y Lección Aprendida no llevan causa raíz/acción correctiva; llevan datos de comunicación
 // Solo Lección Aprendida no lleva causa raíz/acción correctiva; lleva datos de comunicación.
 // Oportunidad de Mejora se trata igual que Observación / No Conformidad (con causa raíz y acción correctiva).
-const TIPOS_SIN_CAUSA_ACCION = ['LA','SUG','CAP','AUD','INSP','TISO','PROG'];
+const TIPOS_SIN_CAUSA_ACCION = ['LA','SUG','RP','CAP','AUD','INSP','TISO','PROG'];
 const MEDIOS_COMUNICACION = ['','Reunión de Seguridad','Correo Electrónico','Cartelera / Boletín HSQE','Charla de Seguridad (Toolbox Talk)','Sistema de Gestión (SGS)','Otro'];
 
 // Tipos que llevan campo "Lecciones Aprendidas" como parte del registro (Accidente / Incidente / Cuasi Accidente)
@@ -630,7 +636,7 @@ function setSiteFilter(v){ currentSiteFilter = v; renderAll(); }
 // Orden y agrupación del menú lateral de categorías
 const NAV_GROUP_HALLAZGOS = ['NC','OBS','OM'];
 const NAV_GROUP_EVENTOS = ['INC','ACC','CUA','LA'];
-const NAV_ORDER_PROACTIVOS = ['AI','CI','SUG'];
+const NAV_ORDER_PROACTIVOS = ['AI','CI','SUG','RP'];
 const NAV_GROUP_CAPACITACION = ['CAP'];
 const NAV_GROUP_AUDITORIAS = ['AUD','INSP'];
 const NAV_GROUP_TAREAS_ISO = ['TISO'];
@@ -643,7 +649,7 @@ const NAV_DOT_COLORS = {
   AUD:'#3E6B8C', INSP:'#2F8F83',                       // auditorías / inspecciones
   NC:'#E67E22', OBS:'#E67E22', OM:'#E67E22',            // naranja
   INC:'#C0392B', ACC:'#C0392B', CUA:'#C0392B', LA:'#C0392B', // rojo
-  AI:'#8FC1E8', CI:'#8FC1E8', SUG:'#8FC1E8',            // celeste claro
+  AI:'#8FC1E8', CI:'#8FC1E8', SUG:'#8FC1E8', RP:'#8FC1E8', // celeste claro
   CAP:'#B39DDB',                                        // violeta claro
 };
 function navDotColor(k){ return NAV_DOT_COLORS[k] || (TYPES[k] && TYPES[k].color) || '#B7C4CE'; }
@@ -1203,6 +1209,15 @@ function getChartSpecs(list, tipo){
     return { scope: TYPES[tipo].label, specs: [
       { title:'¿Se llevará a cabo?', kind:'doughnut', labels:['Sí','No','Sin definir'],
         data:[ list.filter(r=>r.sug_realiza==='Sí').length, list.filter(r=>r.sug_realiza==='No').length, list.filter(r=>!r.sug_realiza).length ],
+        colors:['#1E7A4A','#C0392B','#8B96A1'] },
+      specEstado, specInstalacion,
+    ]};
+  }
+  // Reporte Positivo: no lleva severidad ni causa raíz; se sigue por si fue informado a gerencias.
+  if(tipo === 'RP'){
+    return { scope: TYPES[tipo].label, specs: [
+      { title:'¿Informado a las gerencias?', kind:'doughnut', labels:['Sí','No','Sin definir'],
+        data:[ list.filter(r=>r.rp_informado==='Sí').length, list.filter(r=>r.rp_informado==='No').length, list.filter(r=>!r.rp_informado).length ],
         colors:['#1E7A4A','#C0392B','#8B96A1'] },
       specEstado, specInstalacion,
     ]};
@@ -2035,6 +2050,19 @@ function openRecordForm(id, forceTipo){
           </div>
         </div>
 
+        <div id="block_rp">
+          <div class="section-title" style="margin-top:18px;padding-top:10px;border-top:1px dashed var(--line);">Comunicación a gerencias</div>
+          <div style="font-size:11px;color:var(--graphite-light);margin:-6px 0 10px;">El cierre de este reporte queda sujeto a que haya sido informado a las gerencias.</div>
+          <div class="field-row">
+            <div class="field"><label>¿Informado a las gerencias?</label>
+              <select id="f_rp_informado" onchange="validateEstadoCierre(document.getElementById('f_estado'))">${['','Sí','No'].map(o=>`<option value="${o}" ${r&&r.rp_informado===o?'selected':''}>${o||'Seleccionar...'}</option>`).join('')}</select>
+            </div>
+            <div class="field"><label>Fecha en que se informó</label>
+              <input type="date" id="f_rp_fecha_informado" value="${r?r.rp_fecha_informado||'':''}">
+            </div>
+          </div>
+        </div>
+
         <div id="block_cap">
           <div class="section-title">Datos de la capacitación</div>
           <div class="field-row">
@@ -2454,6 +2482,15 @@ function updateAccionField(tipoAccion, i, field, value){
 }
 function validateEstadoCierre(sel){
   const tipo = document.getElementById('f_tipo').value;
+  if(tipo === 'RP'){
+    if(sel.value !== 'Cerrado') return;
+    const informadoEl = document.getElementById('f_rp_informado');
+    if(!informadoEl || informadoEl.value !== 'Sí'){
+      showToast('No se puede cerrar un Reporte Positivo sin indicar que fue informado a las gerencias');
+      sel.value = 'En Proceso';
+    }
+    return;
+  }
   if(TIPOS_SIN_CAUSA_ACCION.includes(tipo)) return;
   if(sel.value !== 'Cerrado') return;
   const pendientes = [...modalAccionesCorrectivas, ...modalAccionesPreventivas].filter(a => a.estado !== 'Cerrado');
@@ -2511,6 +2548,7 @@ function toggleConditionalFields(){
   document.getElementById('block_clasif_origen').style.display = (TIPOS_CON_CLASIF_ORIGEN.includes(tipo) && !origenInsp) ? 'block' : 'none';
   document.getElementById('block_auditoria_nc').style.display = (tipo === 'NC' && !origenInsp) ? 'block' : 'none';
   const esSug = (tipo === 'SUG');
+  const esRp = (tipo === 'RP');
   const esCap = (tipo === 'CAP');
   const esAud = (tipo === 'AUD');
   const esInsp = (tipo === 'INSP');
@@ -2522,13 +2560,14 @@ function toggleConditionalFields(){
   document.getElementById('block_prog').style.display = esProg ? 'block' : 'none';
   document.getElementById('block_area').style.display = (esAud || esInsp || esTiso || esProg) ? 'none' : 'block';
   document.getElementById('block_causa_accion').style.display = TIPOS_SIN_CAUSA_ACCION.includes(tipo) ? 'none' : 'block';
-  document.getElementById('block_responsable_simple').style.display = (TIPOS_SIN_CAUSA_ACCION.includes(tipo) && !esSug && !esCap && !esAud && !esInsp && !esTiso && !esProg) ? 'grid' : 'none';
-  document.getElementById('block_comunicacion').style.display = (TIPOS_SIN_CAUSA_ACCION.includes(tipo) && !esSug && !esCap && !esAud && !esInsp && !esTiso && !esProg) ? 'block' : 'none';
+  document.getElementById('block_responsable_simple').style.display = (TIPOS_SIN_CAUSA_ACCION.includes(tipo) && !esSug && !esRp && !esCap && !esAud && !esInsp && !esTiso && !esProg) ? 'grid' : 'none';
+  document.getElementById('block_comunicacion').style.display = (TIPOS_SIN_CAUSA_ACCION.includes(tipo) && !esSug && !esRp && !esCap && !esAud && !esInsp && !esTiso && !esProg) ? 'block' : 'none';
   document.getElementById('block_sug_seguimiento').style.display = esSug ? 'block' : 'none';
+  document.getElementById('block_rp').style.display = esRp ? 'block' : 'none';
   document.getElementById('block_cap').style.display = esCap ? 'block' : 'none';
   document.getElementById('block_aud').style.display = esAud ? 'block' : 'none';
   document.getElementById('block_insp').style.display = esInsp ? 'block' : 'none';
-  document.getElementById('block_reportado').style.display = (esCap || esAud || esInsp || esTiso || esProg) ? 'none' : 'block';
+  document.getElementById('block_reportado').style.display = (esRp || esCap || esAud || esInsp || esTiso || esProg) ? 'none' : 'block';
   document.getElementById('block_gestion').style.display = (esSug || esCap) ? 'none' : 'block';
   document.getElementById('block_cuasi').style.display = (tipo === 'CUA') ? 'block' : 'none';
   document.getElementById('block_categoria_aici').style.display = (tipo === 'INC') ? 'block' : 'none';
@@ -2746,6 +2785,7 @@ async function saveRecord(){
   const fechaSel = get('f_fecha');
   const tipoSinAcciones = TIPOS_SIN_CAUSA_ACCION.includes(tipoSel);
   const esSug = (tipoSel === 'SUG');
+  const esRp = (tipoSel === 'RP');
   const esCap = (tipoSel === 'CAP');
   const esAud = (tipoSel === 'AUD');
   const esInsp = (tipoSel === 'INSP');
@@ -2781,6 +2821,15 @@ async function saveRecord(){
 
   if(esSug && estadoSel === 'Cerrado' && !getIf('f_sug_cierre')){
     showToast('Indicá la fecha de cierre de la sugerencia (estado "Cerrado")');
+    return;
+  }
+
+  if(esRp && estadoSel === 'Cerrado' && getIf('f_rp_informado') !== 'Sí'){
+    showToast('No se puede cerrar un Reporte Positivo sin indicar que fue informado a las gerencias');
+    return;
+  }
+  if(esRp && estadoSel === 'Cerrado' && !getIf('f_rp_fecha_informado')){
+    showToast('Indicá la fecha en que se informó a las gerencias');
     return;
   }
 
@@ -2892,6 +2941,8 @@ async function saveRecord(){
     sug_area: esSug ? getIf('f_sug_area') : '',
     sug_realiza: esSug ? getIf('f_sug_realiza') : '',
     sug_observacion: esSug ? getIf('f_sug_observacion') : '',
+    rp_informado: esRp ? getIf('f_rp_informado') : '',
+    rp_fecha_informado: esRp ? getIf('f_rp_fecha_informado') : '',
     adjuntos: JSON.parse(JSON.stringify(modalAttachments)),
   };
   const requiereDescripcion = !esCap && !esAud && !esInsp && !esTiso && !esProg; // estos tipos no tienen campo descripción propio
@@ -3899,6 +3950,11 @@ async function composeRecordBody(id){
     metaCells.push({l:'Tipo', v:r.insp_tipo||'—'});
     metaCells.push({l:'Inspector', v:r.insp_inspector||'—'});
     metaCells.push({l:'Estado actual', v:r.estado||'—'});
+  } else if(r.tipo==='RP'){
+    metaCells.push({l:'¿Informado a las gerencias?', v:r.rp_informado||'—'});
+    metaCells.push({l:'Fecha de información a gerencias', v:r.rp_fecha_informado?fmtDate(r.rp_fecha_informado):'—'});
+    metaCells.push({l:'Estado actual', v:r.estado||'—'});
+    metaCells.push({l:'Fecha de cierre', v:fmtDate(r.fecha_cierre)});
   } else {
     if(TIPOS_CON_SEVERIDAD.includes(r.tipo)) metaCells.push({l:'Severidad', v:r.severidad||'—'});
     else if(r.tipo==='SUG'){
