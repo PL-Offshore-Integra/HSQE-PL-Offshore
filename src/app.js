@@ -2567,7 +2567,7 @@ function toggleConditionalFields(){
   document.getElementById('block_cap').style.display = esCap ? 'block' : 'none';
   document.getElementById('block_aud').style.display = esAud ? 'block' : 'none';
   document.getElementById('block_insp').style.display = esInsp ? 'block' : 'none';
-  document.getElementById('block_reportado').style.display = (esRp || esCap || esAud || esInsp || esTiso || esProg) ? 'none' : 'block';
+  document.getElementById('block_reportado').style.display = (esCap || esAud || esInsp || esTiso || esProg) ? 'none' : 'block';
   document.getElementById('block_gestion').style.display = (esSug || esCap) ? 'none' : 'block';
   document.getElementById('block_cuasi').style.display = (tipo === 'CUA') ? 'block' : 'none';
   document.getElementById('block_categoria_aici').style.display = (tipo === 'INC') ? 'block' : 'none';
@@ -3954,6 +3954,7 @@ async function composeRecordBody(id){
     metaCells.push({l:'¿Informado a las gerencias?', v:r.rp_informado||'—'});
     metaCells.push({l:'Fecha de información a gerencias', v:r.rp_fecha_informado?fmtDate(r.rp_fecha_informado):'—'});
     metaCells.push({l:'Estado actual', v:r.estado||'—'});
+    metaCells.push({l:'Reportado por', v:r.reportado_por||'—'});
     metaCells.push({l:'Fecha de cierre', v:fmtDate(r.fecha_cierre)});
   } else {
     if(TIPOS_CON_SEVERIDAD.includes(r.tipo)) metaCells.push({l:'Severidad', v:r.severidad||'—'});
